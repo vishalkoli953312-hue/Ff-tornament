@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Cloud App Native View</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        /* Base styles */
+        body, html { margin:0; padding:0; width:100%; height:100%; background:#000; color:#fff; font-family:sans-serif; overflow:hidden; }
+        
+        /* Direct App Container - acts exactly like the native <body> */
+        #app-root { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: auto; background: transparent; }
+
+        /* Overlays */
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: none; justify-content: center; align-items: center; text-align: center; z-index: 99999; }
+        #stop-ui { background: #05050a; color: #ff00ea; flex-direction: column; }
+        #offline-popup { background: rgba(0, 0, 0, 0.9); }
+        .offline-box { background: #111; border: 2px solid #ff0000; padding: 30px; border-radius: 10px; }
+    </style>
+</head>
+<body>
+    
+    <div id="offline-popup" class="overlay">
+        <div class="offline-box">
+            <h2 style="color:#ff0000; margin:0 0 10px 0;">No Internet</h2>
+            <p style="margin:0; color:#ccc;">Please check your connection.</p>
+        </div>
+    </div>
+
+    <!-- Parda (Maintenance Screen) -->
+    <div id="stop-ui" class="overlay">
+        <h1 style="font-family:monospace; font-size:2rem; margin-bottom:10px;">SYSTEM OFFLINE</h1>
+        <p>Maintenance in progress...</p>
+    </div>
+    
+    <!-- Yahan aapka Admin Panel wala code Direct Run hoga aur aapka Native Back Button fully kaam karega -->
+    <div id="app-root"></div>
+
+    <script>
+        // Internet Checker
+        const offlinePopup = document.getElementById('offline-popup');
+        window.addEventListener('online', () => offlinePopup.style.display = 'none');
+        window.addEventListener('offline', () => offlinePopup.style.display = 'flex');
+        if(!navigator.onLine) offlinePopup.style.display = 'flex';
+
+        // Firebase Setup
+        const APP_KEY = "-OnwDhZ1muxqhIJ5Lm69";
+        const config = { 
+            apiKey: "AIzaSyBxxNffPvj35t3o780bj3bnnRZrHoB4-nk",
+            databaseURL: "https://free-fire-tornament-64fa8-default-rtdb.firebaseio.com",
+            projectId: "free-fire-tornament-64fa8"
+        };
+        firebase.initializeApp(config);
+        const db = firebase.database();
+
+        const appRoot = document.getElementById('app-root');
+        const stopUi = document.getElementById('stop-ui');
+
+        // Function: Native Execute JavaScript tags inside Admin Code
+        function executeInjectedScripts(container) {
+            const scripts = container.querySelectorAll('script');
+            scripts.forEach(oldScript => {
+                const newScript = document.createElement('script');
+                Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+                if(oldScript.innerHTML) {
+                    newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                }
+                oldScript.parentNode.replaceChild(newScript, oldScript);
+            });
+        }
+
+        // Listener for Code & Maintenance
+        db.ref('apps/'+APP_KEY+'/appState').on('value', s => {
+            const d = s.val() || {};
+            
+            // Maintenance Parda
+            if(d.isStopped) {
+                stopUi.style.display = 'flex';
+            } else {
+                stopUi.style.display = 'none';
+            }
+            
+            // Direct Code Injection (Native behavior ki tarah)
+            if(d.htmlContent && appRoot.innerHTML !== d.htmlContent) {
+                appRoot.innerHTML = d.htmlContent; 
+                executeInjectedScripts(appRoot); // Jo bhi JS dalege wo HopWeb ki tarah live chalu ho jayegi
+            }
+        });
+    </script>
+</body>
+</html>
