@@ -10,7 +10,7 @@
         /* Base styles */
         body, html { margin:0; padding:0; width:100%; height:100%; background:#000; color:#fff; font-family:sans-serif; overflow:hidden; }
         
-        /* Direct App Container - acts exactly like the native <body> */
+        /* Direct App Container */
         #app-root { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: auto; background: transparent; }
 
         /* Overlays */
@@ -35,10 +35,25 @@
         <p>Maintenance in progress...</p>
     </div>
     
-    <!-- Yahan aapka Admin Panel wala code Direct Run hoga aur aapka Native Back Button fully kaam karega -->
+    <!-- Dynamic Content Area -->
     <div id="app-root"></div>
 
     <script>
+        // --- 1. SKETCHWARE & VOICE BRIDGE API ---
+        window.callAppAPI = function(action, data) {
+            // Check if AppAPI exists (Sketchware Android WebView)
+            if (window.AppAPI && typeof window.AppAPI.executeCommand === 'function') {
+                window.AppAPI.executeCommand(action, data);
+            } else {
+                // Browser Fallback (Agar Admin apne PC/Browser me test kar raha ho)
+                console.log('AppAPI Command Triggered:', action, data);
+                if(action === 'tts') {
+                    let utterance = new SpeechSynthesisUtterance(data);
+                    window.speechSynthesis.speak(utterance);
+                }
+            }
+        };
+
         // Internet Checker
         const offlinePopup = document.getElementById('offline-popup');
         window.addEventListener('online', () => offlinePopup.style.display = 'none');
@@ -58,7 +73,8 @@
         const appRoot = document.getElementById('app-root');
         const stopUi = document.getElementById('stop-ui');
 
-        // Function: Native Execute JavaScript tags inside Admin Code
+        // --- 2. AUTO-SCRIPT EXECUTION LOGIC ---
+        // Ye function innerHTML se aane wale <script> tags ko recreate karke run karta hai
         function executeInjectedScripts(container) {
             const scripts = container.querySelectorAll('script');
             scripts.forEach(oldScript => {
@@ -71,21 +87,17 @@
             });
         }
 
-        // Listener for Code & Maintenance
+        // Listener for Admin HTML Code & Maintenance
         db.ref('apps/'+APP_KEY+'/appState').on('value', s => {
             const d = s.val() || {};
             
-            // Maintenance Parda
-            if(d.isStopped) {
-                stopUi.style.display = 'flex';
-            } else {
-                stopUi.style.display = 'none';
-            }
+            // Maintenance Switch
+            stopUi.style.display = d.isStopped ? 'flex' : 'none';
             
-            // Direct Code Injection (Native behavior ki tarah)
+            // Inject and Execute New HTML
             if(d.htmlContent && appRoot.innerHTML !== d.htmlContent) {
                 appRoot.innerHTML = d.htmlContent; 
-                executeInjectedScripts(appRoot); // Jo bhi JS dalege wo HopWeb ki tarah live chalu ho jayegi
+                executeInjectedScripts(appRoot); 
             }
         });
     </script>
