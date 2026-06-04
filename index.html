@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" id="viewport-meta" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
+
+    <title>Premium FF Tournament - App</title>
+    
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Link to External CSS -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <!-- Updated Full Loader with 3D Rolling VS Setup -->
+    <div id="full-loader">
+        <div class="loader-scene">
+            <div class="coin-3d">
+                <div class="coin-layer front"></div>
+                <div class="coin-layer mid-1"></div>
+                <div class="coin-layer mid-2"></div>
+                <div class="coin-layer mid-3"></div>
+                <div class="coin-layer back"></div>
+            </div>
+            <div class="loader-shadow"></div>
+        </div>
+        <span id="loader-text">Processing...</span>
+    </div>
+    
+    <canvas id="confetti-canvas"></canvas>
+
+    <main id="app-container">
+        
+        <div id="ptr-wrapper">
+            <div id="ptr-icon"><i class="fa-solid fa-arrow-down"></i></div>
+        </div>
+
+        <div id="shimmer-screen">
+            <div class="sh-top">
+                <div class="sh-top-left">
+                    <div class="shimmer-box sh-circle"></div>
+                    <div class="sh-lines">
+                        <div class="shimmer-box sh-line-1"></div>
+                        <div class="shimmer-box sh-line-2"></div>
+                    </div>
+                </div>
+                <div class="shimmer-box sh-pill"></div>
+            </div>
+            <div class="shimmer-box sh-banner"></div>
+            <div class="sh-title-1" style="width:130px; height:16px; margin-bottom:12px; border-radius:4px;"></div>
+            <div class="sh-grid">
+                <div class="shimmer-box sh-grid-box"></div>
+                <div class="shimmer-box sh-grid-box"></div>
+                <div class="shimmer-box sh-grid-box"></div>
+            </div>
+        </div>
+
+        <!-- ================= 1. AUTHENTICATION SECTION ================= -->
+        <section id="auth-section">
+            <div class="form-container" id="register-form">
+                <div class="form-header"><h1>Register</h1><p>Join the Tournament Arena</p></div>
+                <div id="reg-msg" class="auth-msg"></div>
+                <form id="regFormElement">
+                    <div class="row-grid">
+                        <div class="input-group"><input type="text" id="reg-first" placeholder="First Name" required><i class="fa-solid fa-user icon"></i></div>
+                        <div class="input-group"><input type="text" id="reg-last" placeholder="Last Name" required><i class="fa-regular fa-user icon"></i></div>
+                    </div>
+                    <div class="input-group"><input type="text" id="reg-user" placeholder="Username" required><i class="fa-solid fa-gamepad icon"></i></div>
+                    <div class="input-group"><div class="phone-prefix">+91</div><input type="tel" id="reg-phone" placeholder="Phone Number" required style="padding-left: 75px;" maxlength="10"><i class="fa-solid fa-phone icon"></i></div>
+                    
+                    <div class="input-group">
+                        <input type="email" id="reg-email" placeholder="Email" required oninput="emailValidation()">
+                        <i class="fa-solid fa-envelope icon"></i>
+                        <i id="email-check-icon" class="fa-solid fa-circle-check"></i>
+                    </div>
+                    <div id="email-validation-msg">Fake or Invalid Email Format</div>
+
+                    <div class="input-group"><input type="password" id="reg-pwd" placeholder="Password (Min 6 chars)" required><i class="fa-solid fa-lock icon"></i><i class="fa-solid fa-eye eye-btn" onclick="togglePassword('reg-pwd', this)"></i></div>
+                    
+                    <div class="input-group promo-group" style="display: flex; gap: 8px;">
+                        <div style="position:relative; flex-grow:1;">
+                            <input type="text" id="reg-promo" placeholder="Referral Code (Optional)">
+                            <i class="fa-solid fa-gift icon"></i>
+                        </div>
+                        <button type="button" class="btn-apply tactile-3d" onclick="verifyPromo()" style="background: var(--apply-bg); color: var(--apply-text); border: none; border-radius: 10px; padding: 0 15px; font-weight: bold; font-size: 12px; white-space: nowrap; height: 42px; display: flex; align-items: center; justify-content: center;">Apply</button>
+                    </div>
+
+                    <button type="button" class="btn-submit tactile-3d" onclick="doRegister(this)">Register</button>
+                    <div class="bottom-text">Already have an account? <span onclick="showLogin()">Login</span></div>
+                </form>
+            </div>
+
+            <div class="form-container" id="login-form">
+                <div class="form-header"><h1>Login</h1><p>Welcome back to the Battle</p></div>
+                <div id="log-msg" class="auth-msg"></div>
+                <form id="logFormElement">
+                    <div class="input-group"><input type="text" id="log-id" placeholder="Phone Number or Email" required><i class="fa-solid fa-user icon"></i></div>
+                    <div class="input-group"><input type="password" id="log-pwd" placeholder="Password" required><i class="fa-solid fa-lock icon"></i><i class="fa-solid fa-eye eye-btn" onclick="togglePassword('log-pwd', this)"></i></div>
+                    <span class="forgot-pass" onclick="showForgot()">Forgot Password?</span>
+                    <button type="button" class="btn-submit tactile-3d" onclick="doLogin(this)">Login</button>
+                    <div class="bottom-text">Don't have an account? <span onclick="showRegister()">Register</span></div>
+                </form>
+            </div>
+
+            <div class="form-container" id="forgot-form">
+                <div id="forgot-header-wrap">
+                    <div class="form-header"><h1 style="font-size: 22px;">Reset Password</h1><p id="forgot-instruction">Tournament Verification</p></div>
+                    <div id="forgot-msg" class="auth-msg"></div>
+                </div>
+                <div id="forgot-step-1">
+                    <div class="input-group"><input type="email" id="forgot-email" placeholder="Enter Registered Email" required><i class="fa-solid fa-envelope icon"></i></div>
+                    <button type="button" class="btn-submit tactile-3d" onclick="sendOTP(this)">Send Verification Code</button>
+                    <div class="bottom-text"><span onclick="showLogin()"><i class="fa-solid fa-arrow-left"></i> Back to Login</span></div>
+                </div>
+                <div id="forgot-step-2" style="display: none;">
+                    <div class="otp-container">
+                        <input type="number" class="otp-box" maxlength="1" id="otp-1" oninput="handleOtpInput(this, 'otp-2')" onkeydown="handleOtpBackspace(event, '', 'otp-1')">
+                        <input type="number" class="otp-box" maxlength="1" id="otp-2" oninput="handleOtpInput(this, 'otp-3')" onkeydown="handleOtpBackspace(event, 'otp-1', 'otp-2')">
+                        <input type="number" class="otp-box" maxlength="1" id="otp-3" oninput="handleOtpInput(this, 'otp-4')" onkeydown="handleOtpBackspace(event, 'otp-2', 'otp-3')">
+                        <input type="number" class="otp-box" maxlength="1" id="otp-4" oninput="handleOtpInput(this, '')" onkeydown="handleOtpBackspace(event, 'otp-3', 'otp-4')">
+                    </div>
+                    <button type="button" class="btn-submit tactile-3d" onclick="verifyOTP()" style="background: #22c55e;">Verify OTP</button>
+                    <div class="bottom-text"><span onclick="showLogin()"><i class="fa-solid fa-arrow-left"></i> Cancel</span></div>
+                </div>
+                <div id="forgot-step-3" style="display: none;">
+                    <div class="input-group"><input type="password" id="forgot-new-pwd" placeholder="New Password" required><i class="fa-solid fa-lock icon"></i><i class="fa-solid fa-eye eye-btn" onclick="togglePassword('forgot-new-pwd', this)"></i></div>
+                    <div class="input-group"><input type="password" id="forgot-conf-pwd" placeholder="Confirm Password" required><i class="fa-solid fa-lock icon"></i><i class="fa-solid fa-eye eye-btn" onclick="togglePassword('forgot-conf-pwd', this)"></i></div>
+                    <button type="button" class="btn-submit tactile-3d" onclick="changePassword(this)" style="background: #38bdf8;">Change Password</button>
+                </div>
+                <div id="forgot-success">
+                    <i class="fa-solid fa-circle-check" style="font-size: 55px; color: #4ade80; margin-bottom: 15px; text-shadow: 0 0 20px rgba(74,222,128,0.5);"></i>
+                    <h2 style="color: #4ade80; font-size: 20px; margin-bottom: 8px;">Congratulations!</h2>
+                    <p style="color: var(--input-text); font-size: 13px;">Password Changed Successfully.</p>
+                    <p style="font-size: 10px; color: #8b949e; margin-top: 20px;">Redirecting to Login...</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= UID VERIFICATION SCREEN ================= -->
+        <section id="uid-verification-section" class="page-section">
+            <div class="uid-card">
+                <i class="fa-solid fa-id-card-clip main-icon"></i>
+                <h2>Verify Game ID</h2>
+                
+                <div id="uid-form-state">
+                    <p>Enter your exact In-Game Name and Number UID to participate in tournaments.</p>
+                    <div class="uid-reject-box" id="uid-reject-msg">Reason: Fake Screenshot</div>
+                    <input type="text" id="verify-game-id" class="glass-input" placeholder="Enter In-Game Name">
+                    <input type="number" id="verify-game-uid" class="glass-input" placeholder="Enter UID Number">
+                    <button class="glass-btn tactile-3d" onclick="submitUidVerification()">Submit for Verification</button>
+                    <button class="glass-btn-cancel" onclick="logoutUser()" style="margin-top:10px;"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+                </div>
+
+                <div id="uid-pending-state" class="uid-pending-box">
+                    <p id="uid-inst-show" style="color:#fff; font-size:13px;">Please wait while we verify your ID.</p>
+                    <img id="uid-step-img-show" src="" alt="Verification Step" style="display:none;">
+                    <div style="font-size:12px; color:#00e5ff; margin-bottom:5px;">Submitted UID: <strong id="uid-submitted-val"></strong></div>
+                    <div class="uid-status-badge"><i class="fa-solid fa-clock"></i> Verification Pending</div>
+                    <button class="glass-btn-cancel" onclick="logoutUser()" style="margin-top:20px;"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 2. HOME PAGE SECTION ================= -->
+        <section id="home-section" class="page-section">
+            <header class="h-topbar">
+                <!-- LOGO DYNAMIC WRAPPER -->
+                <a href="#" id="ui-top-logo-link" target="_blank" class="h-logo-link tactile-3d">
+                    <div class="h-logo-ring"></div>
+                    <div class="h-logo" id="ui-logo"></div>
+                </a>
+                
+                <div class="h-top-center">
+                    <div id="ui-txt-wel-wrap"><span id="ui-txt-wel">Welcome Back,</span></div>
+                    <div id="ui-txt-appname-wrap"><strong id="ui-txt-appname">App Name</strong></div>
+                </div>
+                
+                <div class="h-top-right">
+                    <div class="noti-wrapper" onclick="showNotifications()">
+                        <i class="fa-solid fa-bell h-noti tactile-3d"></i>
+                        <div class="noti-badge" id="noti-badge-dot"></div>
+                    </div>
+                    <div class="h-balance tactile-3d flex-amt" onclick="showWallet()"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon"> <span id="ui-live-balance" class="game-font">0</span></div>
+                </div>
+            </header>
+            
+            <main class="h-body">
+                
+                <!-- NEW BIG PREMIUM CLOCK -->
+                <div class="premium-clock" id="mini-clock">00:00:00 AM</div>
+
+                <!-- 3D SQUAD FIRE PREMIUM BANNER -->
+                <div class="h-announce-wrapper" onclick="showUpdatesList()">
+                    <div class="premium-banner tactile-3d">
+                        <div class="icon-section">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M12 4v4.5l3.5 3.5H12V20h-2v-6H7l-3.5-3.5V4h8m2-2H10c-1.1 0-2 .9-2 2v3H4c-1.1 0-2 .9-2 2v5c0 1.1.9 2 2 2h2v4c0 1.1.9 2 2 2h4c1.1 0 2-.9 2-2v-4h2c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"></path>
+                            </svg>
+                        </div>
+                        <div class="text-section" id="ui-txt-ann">
+                            Welcome to Squad Fire <span class="fire-emoji">🔥</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="headshot-container" id="ui-txt-acc-wrap">
+                    <div class="headshot-title" id="ui-txt-acc">Account Details</div>
+                    <div class="headshot-divider"><div class="h-line left"></div><i class="fa-solid fa-skull h-title-icon"></i><div class="h-line right"></div></div>
+                </div>
+                
+                <div class="h-account-row">
+                    <div class="h-acc-item" data-mode="custom" onclick="showProfile()"><div class="h-acc-circ tactile-3d"><i class="fa-solid fa-user"></i></div><div class="h-acc-txt">Account</div></div>
+                    <div class="h-acc-item" data-mode="custom" onclick="showWallet()"><div class="h-acc-circ tactile-3d"><i class="fa-solid fa-wallet"></i></div><div class="h-acc-txt">Wallet</div></div>
+                    <div class="h-acc-item" data-mode="custom" onclick="showTopWinners()"><div class="h-acc-circ tactile-3d"><i class="fa-solid fa-trophy"></i></div><div class="h-acc-txt">Top</div></div>
+                    <div class="h-acc-item" data-mode="custom" onclick="showReferral()"><div class="h-acc-circ tactile-3d"><i class="fa-solid fa-gift"></i></div><div class="h-acc-txt">Earn</div></div>
+                </div>
+                
+                <!-- UPGRADED PROMO BANNER: Slider track direct wraps individual 3D boxes dynamically in app.js -->
+                <div class="h-banner-wrapper">
+                    <div class="h-banner-track" id="ui-banner-track"></div>
+                    <div class="h-banner-dots" id="ui-banner-dots"></div>
+                </div>
+                
+                <div class="headshot-container" id="ui-txt-con-wrap">
+                    <div class="headshot-title" id="ui-txt-con">My Contest</div>
+                    <div class="headshot-divider"><div class="h-line left"></div><i class="fa-solid fa-crosshairs h-title-icon"></i><div class="h-line right"></div></div>
+                </div>
+                
+                <div class="h-contest-row">
+                    <div class="h-con-box tactile-3d" onclick="openMyMatches('upcoming')"><i class="fa-solid fa-clock"></i>Upcoming</div>
+                    <div class="h-con-box tactile-3d" onclick="openMyMatches('live')"><i class="fa-solid fa-bolt"></i>ONCOMING</div>
+                    <div class="h-con-box tactile-3d" onclick="openMyMatches('completed')"><i class="fa-solid fa-check-double"></i>Completed</div>
+                </div>
+                
+                <div class="headshot-container" id="ui-txt-game-wrap">
+                    <div class="headshot-title" id="ui-txt-game">eSport Games</div>
+                    <div class="headshot-divider"><div class="h-line left"></div><i class="fa-solid fa-gamepad h-title-icon"></i><div class="h-line right"></div></div>
+                </div>
+                
+                <div class="h-games-grid" id="ui-games-container"></div>
+            </main>
+            
+            <div class="fab-contact tactile-3d" id="fab-contact-btn">
+                <i class="fas fa-headset"></i>
+            </div>
+        </section>
+
+        <!-- ================= 3. NEW PREMIUM LEADERBOARD (TOP) SECTION ================= -->
+        <section id="top-section" class="page-section">
+            <header class="lb-header">
+                <i class="fa-solid fa-arrow-left tactile-3d" onclick="goBack()" style="position: absolute; left: 15px; top: 30px; font-size: 20px; cursor: pointer; color: #fff;"></i>
+                <h1>Top Players</h1>
+            </header>
+
+            <div class="lb-tabs">
+                <button class="lb-tab-btn active">WEEKLY</button>
+                <button class="lb-tab-btn">MONTHLY</button>
+                <button class="lb-tab-btn">OVERALL</button>
+            </div>
+
+            <!-- 3D Podium Layer -->
+            <div class="lb-podium-container">
+                <!-- 2nd Place -->
+                <div class="lb-podium-item p-2">
+                    <div class="podium-avatar-wrap">
+                        <img src="https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png" class="podium-player-logo" id="p-img-2" alt="Avatar">
+                        <img src="https://i.ibb.co/Dg16Sdr6/390df9b030da91c411ed55c9618ccd8a.png" class="podium-frame" alt="Rank 2 Frame">
+                        
+                        <i class="fa-solid fa-star star-glitter r2-star r2-s1"></i>
+                        <i class="fa-solid fa-star star-glitter r2-star r2-s2"></i>
+                        <i class="fa-solid fa-star star-glitter r2-star r2-s3"></i>
+                        <i class="fa-solid fa-star star-glitter r2-star r2-s4"></i>
+                        <div class="podium-badge">2</div>
+                    </div>
+                    <div class="podium-name" id="p-name-2">Loading...</div>
+                    <div class="podium-score game-font flex-amt" id="p-score-2">0</div>
+                </div>
+
+                <!-- 1st Place -->
+                <div class="lb-podium-item p-1">
+                    <i class="fa-solid fa-crown podium-crown"></i>
+                    <div class="podium-avatar-wrap">
+                        <img src="https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png" class="podium-player-logo" id="p-img-1" alt="Avatar">
+                        <img src="https://i.ibb.co/1YdGS0Sg/dd74a5ca58cc948b3da6e121bc9090ca.png" class="podium-frame" alt="Rank 1 Frame">
+                        
+                        <i class="fa-solid fa-star star-glitter r1-star r1-s1"></i>
+                        <i class="fa-solid fa-star star-glitter r1-star r1-s2"></i>
+                        <i class="fa-solid fa-star star-glitter r1-star r1-s3"></i>
+                        <i class="fa-solid fa-star star-glitter r1-star r1-s4"></i>
+                        <i class="fa-solid fa-star star-glitter r1-star r1-s5"></i>
+                        <i class="fa-solid fa-star star-glitter r1-star r1-s6"></i>
+                        <i class="fa-solid fa-star star-glitter r1-star r1-s7"></i>
+                        <i class="fa-solid fa-star star-glitter r1-star r1-s8"></i>
+                        <div class="podium-badge">1</div>
+                    </div>
+                    <div class="podium-name" id="p-name-1">Loading...</div>
+                    <div class="podium-score game-font flex-amt" id="p-score-1">0</div>
+                </div>
+
+                <!-- 3rd Place -->
+                <div class="lb-podium-item p-3">
+                    <div class="podium-avatar-wrap">
+                        <img src="https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png" class="podium-player-logo" id="p-img-3" alt="Avatar">
+                        <img src="https://i.ibb.co/SwpPzpBQ/4bb6e10a98e2dec75e566b230f47698f.png" class="podium-frame" alt="Rank 3 Frame">
+                        
+                        <i class="fa-solid fa-star star-glitter r3-star r3-s1"></i>
+                        <i class="fa-solid fa-star star-glitter r3-star r3-s2"></i>
+                        <i class="fa-solid fa-star star-glitter r3-star r3-s3"></i>
+                        <div class="podium-badge">3</div>
+                    </div>
+                    <div class="podium-name" id="p-name-3">Loading...</div>
+                    <div class="podium-score game-font flex-amt" id="p-score-3">0</div>
+                </div>
+            </div>
+
+            <!-- Leaderboard Waterfall List -->
+            <div class="lb-list-container">
+                <div class="lb-list-header"><span>Rank</span><span>Player</span><span>Winnings</span></div>
+                <div id="loading-text" style="display:none;">Loading...</div>
+                <div id="leaderboard-list-items">
+                    <!-- Dynamic rendering via JS for Rank 4+ -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= GAME MATCHES LIST SECTION ================= -->
+        <section id="game-matches-section" class="page-section">
+            
+            <div class="matches-fixed-header">
+                <div class="match-top-header">
+                    <i class="fa-solid fa-arrow-left" onclick="goBack()"></i>
+                    <span id="gm-title">Match Category</span>
+                    <i class="fa-solid fa-headset"></i>
+                </div>
+
+                <div class="match-tabs">
+                    <button class="m-tab" data-tab="live"><span class="live-dot"></span> LIVE</button>
+                    <button class="m-tab active" data-tab="upcoming">UPCOMING</button>
+                    <button class="m-tab" data-tab="completed">RESULTS</button>
+                </div>
+
+                <div class="premium-dropdown-wrapper" id="gm-sub-tabs">
+                    <select class="match-filter-dropdown" id="gm-sub-tab-select">
+                        <option value="ALL">All Matches</option>
+                        <option value="SOLO">Solo</option>
+                        <option value="DUO">Duo</option>
+                        <option value="SQUAD">Squad</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="match-list-container" id="matches-wrapper">
+                <!-- Cards will be rendered here via JS -->
+            </div>
+
+            <div class="fab-matches tactile-3d" onclick="openMyMatches('upcoming')"><i class="fa-solid fa-trophy"></i></div>
+        </section>
+
+        <!-- ================= MY MATCHES SECTION ================= -->
+        <section id="my-matches-section" class="page-section">
+            <div class="matches-fixed-header">
+                <div class="match-top-header">
+                    <i class="fa-solid fa-arrow-left" onclick="goBack()"></i>
+                    <span>My Matches</span>
+                    <div style="width:20px;"></div>
+                </div>
+
+                <div class="match-tabs" style="margin-bottom: 10px;">
+                    <button class="m-tab" id="mm-tab-live" onclick="setMyMatchesTab('live')"><span class="live-dot"></span> LIVE</button>
+                    <button class="m-tab active" id="mm-tab-upcoming" onclick="setMyMatchesTab('upcoming')">UPCOMING</button>
+                    <button class="m-tab" id="mm-tab-completed" onclick="setMyMatchesTab('completed')">COMPLETED</button>
+                </div>
+            </div>
+
+            <div class="mm-empty-state">
+                <div class="mm-empty-icon">
+                    <div class="mm-doc">?</div>
+                </div>
+                <h3>No oncoming matches!</h3>
+                <p>You haven't yet participated in any match.<br>Hurry up... Participate to win huge.</p>
+            </div>
+        </section>
+
+        <!-- ================= 3. MY WALLET PAGE ================= -->
+        <section id="wallet-section" class="page-section">
+            <div class="w-topbar"><i class="fa-solid fa-arrow-left" onclick="goBack()"></i> My Wallet</div>
+            <div class="w-content">
+                <div class="w-card tactile-3d">
+                    <div class="w-card-inner">
+                        <div class="w-card-top"><i class="fa-solid fa-wifi w-card-nfc" style="transform: rotate(90deg);"></i><div class="w-card-chip"><div class="w-card-chip-lines"></div></div></div>
+                        <div class="w-card-title">TOTAL BALANCE</div>
+                        <div class="w-card-bal game-font flex-amt left"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:35px; height:35px;"> <span id="w-total-bal">0</span></div>
+                        
+                        <div class="w-stats-row">
+                            <div class="w-stat left"><div class="w-stat-title">Deposit</div><div class="w-stat-val game-font flex-amt left"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:18px; height:18px;"> <span id="w-dep-bal">0</span></div></div>
+                            <div class="w-stat center"><div class="w-stat-title">Bonus</div><div class="w-stat-val game-font flex-amt center"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:18px; height:18px;"> <span id="w-bon-bal">0</span></div></div>
+                            <div class="w-stat right"><div class="w-stat-title" style="color: #4ade80;">Winning</div><div class="w-stat-val game-font flex-amt right" style="color:#fff;"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:18px; height:18px;"> <span id="w-win-bal">0</span></div></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="w-btn-row">
+                    <button class="w-btn w-btn-add tactile-3d" onclick="startRechargeFlow()"><i class="fa-solid fa-circle-plus"></i> ADD MONEY</button>
+                    <button class="w-btn w-btn-with tactile-3d" onclick="openWithdrawalSection()"><i class="fa-solid fa-money-bill-transfer"></i> WITHDRAW</button>
+                </div>
+                <div class="w-recent-title">Recent Transactions</div>
+                <div id="wallet-trx-list" class="trx-list">
+                    <div class="w-empty-state"><i class="fa-solid fa-receipt" style="font-size:26px; opacity:0.3; display:block; margin-bottom:8px;"></i>No transactions yet.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= 4. ADD MONEY PAGE ================= -->
+        <section id="addmoney-section" class="page-section">
+            <div class="am-topbar"><i class="fa-solid fa-arrow-left" onclick="goBack()"></i> Add Money</div>
+            
+            <div class="recharge-step active" style="padding: 20px 15px;">
+                <div class="am-header-txt">
+                    <p>Deposit Balance</p>
+                    <h2 class="game-font flex-amt">
+                        <img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:28px; height:28px;"> 
+                        <span id="am-dep-show">0</span>
+                    </h2>
+                </div>
+                
+                <div class="am-inp-wrapper">
+                    <i class="fa-solid fa-indian-rupee-sign"></i>
+                    <input type="number" id="am-amount" placeholder="Enter Amount">
+                </div>
+                
+                <div style="display:flex; justify-content:space-between; font-size:10px; color:#888; margin-bottom:18px; padding: 0 5px;">
+                    <span id="am-min-txt">Min: ₹10</span>
+                    <span id="am-max-txt">Max: ₹10000</span>
+                </div>
+                
+                <div class="amount-presets" id="am-presets"></div>
+                
+                <!-- AUTO TRIGGER ONLINE GATEWAY BUTTON -->
+                <button class="am-btn-submit tactile-3d" id="am-btn-text" onclick="initiateGatewayPayment()" style="margin-top:20px;">Proceed to Pay</button>
+            </div>
+        </section>
+
+        <!-- ================= 5. WITHDRAWAL FULL PAGE SECTION ================= -->
+        <section id="withdrawal-section" class="page-section">
+            <div class="am-topbar"><i class="fa-solid fa-arrow-left" onclick="goBack()"></i> Withdraw Funds</div>
+            
+            <div class="recharge-step active" style="padding: 20px 15px;">
+                <div class="am-header-txt">
+                    <p>Winning Balance</p>
+                    <h2 class="game-font flex-amt">
+                        <img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:28px; height:28px;"> 
+                        <span id="wm-bal-show">0</span>
+                    </h2>
+                </div>
+                
+                <!-- Amount input wrapper -->
+                <div class="am-inp-wrapper">
+                    <i class="fa-solid fa-indian-rupee-sign"></i>
+                    <input type="number" id="wm-amt" placeholder="Amount (Min ₹50)">
+                </div>
+                
+                <!-- UPI input wrapper -->
+                <div class="am-inp-wrapper" style="margin-top: 15px;">
+                    <i class="fa-solid fa-wallet"></i>
+                    <input type="text" id="wm-upi" placeholder="Enter UPI ID or Bank Details">
+                </div>
+                
+                <!-- Submit Button -->
+                <button class="am-btn-submit tactile-3d" id="wm-submit-btn" onclick="submitWithdrawal()" style="margin-top:25px;">WITHDRAW</button>
+            </div>
+        </section>
+
+        <div id="success-popup"><i class="fa-solid fa-circle-check"></i><h2>Success!</h2><p id="success-msg">Your request has been submitted.</p></div>
+
+        <!-- ================= 6. OTHER SECTIONS ================= -->
+        <section id="updates-list-section" class="page-section"><div class="u-top"><i class="fa-solid fa-arrow-left" onclick="goBack()"></i> Important Updates</div><div class="u-list-container" id="ui-updates-list-container"><p style="text-align:center; padding: 20px; color:#888; font-size:12px;">Loading updates...</p></div></section>
+        <section id="updates-post-section" class="page-section" style="padding-bottom: 0;"><div class="upd-img" id="ui-upd-img"><i class="fa-solid fa-arrow-left upd-back tactile-3d" onclick="goBack()"></i></div><div class="upd-content"><div class="upd-title" id="ui-upd-title">Title</div><div class="upd-time" id="ui-upd-time">Time</div><div class="upd-desc" id="ui-upd-desc">Description text...</div></div></section>
+        <section id="notifications-section" class="page-section"><div class="u-top"><i class="fa-solid fa-arrow-left" onclick="goBack()"></i> Notifications</div><div class="u-list-container" id="ui-notifications-list"><p style="text-align:center; padding: 20px; color:#888; font-size:12px;">No notifications yet.</p></div></section>
+        <section id="ref-section" class="page-section"><div class="placeholder-page"><i class="fa-solid fa-hand-holding-dollar"></i><h2>Refer & Earn</h2><p>Share with friends and earn bonus cash!</p></div></section>
+        
+        <section id="trx-history-section" class="page-section">
+            <div class="u-top"><i class="fa-solid fa-arrow-left" onclick="goBack()"></i> Transaction History</div>
+            <div class="trx-list-container" id="full-trx-list">
+                <div class="w-empty-state">Loading transactions...</div>
+            </div>
+        </section>
+
+        <!-- ================= 7. PREMIUM ESPORTS PROFILE SECTION ================= -->
+        <section id="profile-section" class="page-section">
+            <div class="pro-header">
+                <div class="pro-cover" id="pro-cover-img">
+                    <div class="pro-social">
+                        <i class="fab fa-instagram tactile-3d" id="social-insta"></i>
+                        <i class="fab fa-youtube tactile-3d" id="social-yt"></i>
+                        <i class="fab fa-telegram tactile-3d" id="social-tg" style="color:#38bdf8;"></i>
+                    </div>
+                </div>
+                
+                <div class="pro-avatar-container">
+                    <div class="pro-avatar-frame"></div>
+                    <img src="https://i.pinimg.com/originals/ce/a0/0b/cea00b52203ba302ba2ce6337cb101ca.jpg" alt="Avatar" class="pro-avatar" id="pro-avatar-img">
+                </div>
+                
+                <div class="pro-user-info">
+                    <h1 id="pro-name-show">USERNAME</h1>
+                    <div class="pro-uid">UID: <span id="pro-uid-val">12345678</span> <i class="far fa-copy" style="cursor:pointer; color:#00e5ff;" onclick="copyText('pro-uid-val')"></i></div>
+                </div>
+            </div>
+
+            <article class="pro-wallet-card">
+                <p class="pro-bal-txt">Total Wallet Balance</p>
+                <h2 class="pro-tot-bal game-font flex-amt"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:32px; height:32px;"> <span class="counter" data-target="0" id="pro-tot-bal">0</span></h2>
+                
+                <div class="pro-split-bal">
+                    <div class="pro-bal-item left"><span class="lbl">Deposit</span><span class="amt game-font flex-amt left" id="pro-dep-bal"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:16px; height:16px;"> 0</span></div>
+                    <div class="pro-bal-item center"><span class="lbl">Bonus</span><span class="amt game-font flex-amt center" id="pro-bon-bal"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:16px; height:16px;"> 0</span></div>
+                    <div class="pro-bal-item right"><span class="lbl" style="color:#4ade80;">Winnings</span><span class="amt game-font flex-amt right" id="pro-win-bal"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:16px; height:16px;"> 0</span></div>
+                </div>
+                <div class="pro-btns">
+                    <button class="pro-btn-add tactile-3d" onclick="startRechargeFlow()"><i class="fas fa-wallet"></i> Add Money</button>
+                    <button class="pro-btn-with tactile-3d" onclick="openWithdrawalSection()">Withdraw</button>
+                </div>
+            </article>
+
+            <h3 class="pro-sec-title">Combat Stats</h3>
+            <article class="pro-stats-grid">
+                <div class="pro-stat-box tactile-3d">
+                    <i class="fas fa-gamepad"></i>
+                    <div class="pro-stat-val counter" data-target="0" id="pro-stat-matches">0</div>
+                    <div class="pro-stat-name">Matches</div>
+                </div>
+                <div class="pro-stat-box tactile-3d">
+                    <i class="fas fa-ranking-star"></i>
+                    <div class="pro-stat-val" id="pro-stat-toprank">#0</div>
+                    <div class="pro-stat-name">Top Rank</div>
+                </div>
+                <div class="pro-stat-box tactile-3d">
+                    <i class="fas fa-skull"></i>
+                    <div class="pro-stat-val counter" data-target="0" id="pro-stat-kills">0</div>
+                    <div class="pro-stat-name">Total Kills</div>
+                </div>
+            </article>
+
+            <h3 class="pro-sec-title">App Settings & Info</h3>
+            <ul class="pro-list">
+                <li class="tactile-3d" onclick="showTransactionHistory()"><span><i class="fas fa-receipt" style="color:#38bdf8;"></i> Transaction History</span> <i class="fas fa-chevron-right"></i></li>
+                <li class="tactile-3d" onclick="openGameUidModal()"><span><i class="fas fa-id-badge" style="color:#facc15;"></i> Change Game UID</span> <i class="fas fa-chevron-right"></i></li>
+                <li class="tactile-3d" onclick="openPasswordModal()"><span><i class="fas fa-lock" style="color:#ec4899;"></i> Change Password</span> <i class="fas fa-chevron-right"></i></li>
+
+                <li class="tactile-3d" onclick="showTopWinners()"><span><i class="fas fa-crown" style="color:gold;"></i> Top Players</span> <i class="fas fa-chevron-right"></i></li>
+                <li class="tactile-3d" onclick="showReferral()"><span><i class="fas fa-gift" style="color:#4ade80;"></i> Rewards</span> <i class="fas fa-chevron-right"></i></li>
+
+                <li class="tactile-3d" onclick="openPolicyViewer('html_fairplay', 'Fair Play Policy')"><span><i class="fas fa-shield-alt" style="color:#00e5ff;"></i> Fair Play Policy</span> <i class="fas fa-chevron-right"></i></li>
+                <li class="tactile-3d" onclick="openPolicyViewer('html_terms', 'Terms & Conditions')"><span><i class="fas fa-file-contract" style="color:#a855f7;"></i> Terms & Conditions</span> <i class="fas fa-chevron-right"></i></li>
+                <li class="tactile-3d" onclick="openPolicyViewer('html_privacy', 'Privacy Policy')"><span><i class="fas fa-user-secret" style="color:#4ade80;"></i> Privacy Policy</span> <i class="fas fa-chevron-right"></i></li>
+                <li class="tactile-3d" onclick="openPolicyViewer('html_refund', 'Refund Policy')"><span><i class="fas fa-undo" style="color:#facc15;"></i> Refund Policy</span> <i class="fas fa-chevron-right"></i></li>
+                
+                <li class="pro-logout tactile-3d" onclick="logoutUser()"><span><i class="fas fa-sign-out-alt"></i> Log Out</span></li>
+            </ul>
+        </section>
+
+        <section id="policy-viewer-section" class="page-section">
+            <div class="u-top"><i class="fa-solid fa-arrow-left" onclick="goBack()"></i> <span id="policy-title" style="margin-left:15px;">Policy</span></div>
+            <div class="policy-content" id="policy-content">Loading...</div>
+        </section>
+
+        <!-- MODALS FOR UID & PASSWORD -->
+        <div class="custom-overlay" id="uid-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
+            <div class="glass-modal">
+                <h3>Change Game UID</h3>
+                <p>Update your in-game ID. It will require admin approval.</p>
+                <input type="text" id="prof-game-id" class="glass-input" placeholder="Enter In-Game Name">
+                <input type="number" id="prof-game-uid" class="glass-input" placeholder="Enter New UID Number">
+                <button class="glass-btn tactile-3d" onclick="submitChangeUid()">Submit for Approval</button>
+                <button class="glass-btn-cancel" onclick="closeGlassModal('uid-modal')">Cancel</button>
+            </div>
+        </div>
+
+        <div class="custom-overlay" id="password-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:9999; justify-content:center; align-items:center;">
+            <div class="glass-modal">
+                <h3>Change Password</h3>
+                <p>Set a new secure password.</p>
+                <input type="password" id="old-sec-pass" class="glass-input" placeholder="Enter Old Password">
+                <input type="password" id="new-sec-pass" class="glass-input" placeholder="New Password (Min 6 chars)">
+                <input type="password" id="conf-sec-pass" class="glass-input" placeholder="Confirm New Password">
+                <button class="glass-btn tactile-3d" onclick="submitChangePassword()" style="background:#a855f7; color:#fff;">Update Password</button>
+                <button class="glass-btn-cancel" onclick="closeGlassModal('password-modal')">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Prize Pool Info Modal -->
+        <div id="prize-modal">
+            <div class="prize-box">
+                <div class="prize-head">
+                    <div class="prize-close tactile-3d" onclick="closePrizeModal()"><i class="fa-solid fa-xmark"></i></div>
+                    <h3>Prize Pool</h3>
+                    <p id="pz-match-name">FF FULL MAP | SOLO</p>
+                </div>
+                <div class="prize-body">
+                    <h4>Prize Distribution Details:</h4>
+                    <p id="pz-details-txt">1st Place: INR 40 + Kill Points</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= 8. PREMIUM 3D BOTTOM NAVIGATION BAR ================= -->
+        <nav id="bottom-nav">
+            <div class="nav-item" id="nav-top" onclick="showTopWinners()"><i class="fa-solid fa-crown"></i><span>Top</span></div>
+            <div class="nav-item" id="nav-ref" onclick="showReferral()"><i class="fa-solid fa-gift"></i><span>Refer</span></div>
+            <div class="nav-item active" id="nav-home" onclick="showHomePanel()">
+                <div class="animated-icon-btn"><i class="fa-solid fa-house"></i></div>
+            </div>
+            <div class="nav-item" id="nav-wal" onclick="showWallet()"><i class="fa-solid fa-wallet"></i><span>Wallet</span></div>
+            <div class="nav-item" id="nav-pro" onclick="showProfile()"><i class="fa-solid fa-user"></i><span>Account</span></div>
+        </nav>
+
+    </main>
+
+    <!-- Link to External Modular JavaScript -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
