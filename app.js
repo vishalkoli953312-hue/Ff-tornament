@@ -1,0 +1,2129 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, updatePassword, updateEmail, EmailAuthProvider, reauthenticateWithCredential } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, query, orderBy, where, addDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import { getDatabase, ref, set, push, remove, update } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+// Firebase Configurations (Main App)
+const firebaseConfig = {
+  apiKey: "AIzaSyCt3W96wZhdnbX2NiWiMFERQVXeFIdxyp0",
+  authDomain: "my-game-7da3b.firebaseapp.com",
+  databaseURL: "https://my-game-7da3b-default-rtdb.firebaseio.com",
+  projectId: "my-game-7da3b",
+  storageBucket: "my-game-7da3b.firebasestorage.app",
+  messagingSenderId: "628106631481",
+  appId: "1:628106631481:web:338fe45a9939cdcb09b0e8",
+  measurementId: "G-VJ6V9W5XX6"
+};
+
+// Firebase Configurations (Spinner Project)
+const spinnerConfig = {
+  apiKey: "AIzaSyAQ8Ffv4g20YYmBPYCceaeZO6uh9ixZirM",
+  authDomain: "spinner-b363e.firebaseapp.com",
+  databaseURL: "https://spinner-b363e-default-rtdb.firebaseio.com",
+  projectId: "spinner-b363e",
+  storageBucket: "spinner-b363e.firebasestorage.app",
+  messagingSenderId: "1008724227546",
+  appId: "1:1008724227546:web:ae87d1097f6b5dad243ce3",
+  measurementId: "G-R87077TPQS"
+};
+
+// Initialize Both Apps
+const app = initializeApp(firebaseConfig); 
+const auth = getAuth(app); 
+const db = getFirestore(app); 
+
+const spinnerApp = initializeApp(spinnerConfig, "spinnerApp");
+const rtdb = getDatabase(spinnerApp);
+
+const root = document.documentElement;
+
+let currentUserDoc = null; 
+let globalUpdatesData = []; 
+let isResettingPassword = false; 
+let uiFetched = false; 
+let uiFetchPromise = fetchUIControls();
+let appProfileSettings = {};
+
+let addMoneySettings = { min: 10, max: 10000, btnText: 'Proceed to Pay' };
+let minWithdrawLimit = 50;
+let globalTransactions = [];
+let isSendingOTP = false; 
+let unsubscribeMatches = null; 
+let unsubscribeNotifications = null;
+
+let selectedImageFile = null; // Temp local storage for logo adjustment
+
+// Touch Crop Tool State Variables
+let zoomScale = 1;
+let transX = 0;
+let transY = 0;
+let startTouchX = 0;
+let startTouchY = 0;
+let initialDistance = 0;
+let isDraggingImg = false;
+
+// Swipe Gesture State Variables & Sequence
+let swipeStartX = 0;
+let swipeStartY = 0;
+const tabsSequence = ['top', 'refer', 'home', 'wallet', 'profile'];
+const mainTabs = ['home', 'top', 'refer', 'wallet', 'profile'];
+
+// ==========================================
+// SYSTEM FUNCTIONS FOR SPINNER
+// ==========================================
+window.triggerWithdraw = function(amountVal) {
+    if (!amountVal) return Promise.reject("Amount is empty");
+    return set(ref(rtdb, "last_request"), {
+        amount: amountVal,
+        time: Date.now()
+    });
+}
+
+window.addScriptTemplate = function(newScriptText) {
+    if (!newScriptText) return Promise.reject("Script text is empty");
+    return push(ref(rtdb, "settings/scripts"), newScriptText);
+}
+
+window.selectActiveScript = function(scriptId, scriptText) {
+    set(ref(rtdb, "settings/activeScriptId"), scriptId);
+    return set(ref(rtdb, "settings/script"), scriptText);
+}
+
+window.deleteScriptTemplate = function(scriptId) {
+    return remove(ref(rtdb, `settings/scripts/${scriptId}`));
+}
+
+window.setAmountLanguage = function(langType) {
+    return set(ref(rtdb, "settings/amountLang"), langType);
+}
+
+window.saveHardwareSettings = function(speed, pitch, volume, stream) {
+    return update(ref(rtdb, "settings"), {
+        speed: parseFloat(speed),
+        pitch: parseFloat(pitch),
+        volume: parseInt(volume),
+        stream: stream
+    });
+}
+
+// ==========================================
+// COMPACT LIVE SERVER CLOCK LOGIC
+// ==========================================
+function updateLiveClock() {
+    const now = new Date();
+    let h = now.getHours(); let m = now.getMinutes(); let s = now.getSeconds();
+    let ampm = h >= 12 ? 'PM' : 'AM';
+    h = h % 12; h = h ? h : 12; 
+    
+    let hh = h < 10 ? '0' + h : h;
+    let mm = m < 10 ? '0' + m : m;
+    let ss = s < 10 ? '0' + s : s;
+    
+    const clockEl = document.getElementById('mini-clock');
+    if(clockEl) { clockEl.innerText = `${hh}:${mm}:${ss} ${ampm}`; }
+}
+setInterval(updateLiveClock, 500); 
+updateLiveClock();
+
+// ==========================================
+// PROFESSIONAL NAVIGATION STATE MACHINE (RE-DESIGNED)
+// ==========================================
+let currentActiveTab = 'home';
+
+window.goBack = function() {
+    if (currentActiveTab === 'home') {
+        if (confirm("Kya aap App se bahar jaana chahte hain?")) { 
+            if (navigator.app && navigator.app.exitApp) {
+                navigator.app.exitApp();
+            } else {
+                window.close(); 
+            }
+        }
+    } 
+    // If on secondary tabs, clean-pop history directly back to Home
+    else if (mainTabs.includes(currentActiveTab)) {
+        window.history.back();
+    } 
+    // Nested screens follow linear standard history popping
+    else {
+        window.history.back();
+    }
+}
+
+window.addEventListener('popstate', (e) => {
+    if (document.getElementById('prize-modal').style.display === 'flex') {
+        closePrizeModal();
+        pushHistoryState(currentActiveTab);
+        return;
+    }
+    if (document.getElementById('uid-modal').style.display === 'flex') { 
+        closeGlassModal('uid-modal'); 
+        pushHistoryState(currentActiveTab); 
+        return; 
+    }
+    if (document.getElementById('password-modal').style.display === 'flex') { 
+        closeGlassModal('password-modal'); 
+        pushHistoryState(currentActiveTab); 
+        return; 
+    }
+
+    if (e.state && e.state.id) {
+        routeToState(e.state.id, true);
+    } else {
+        routeToState('home', true);
+    }
+});
+
+function pushHistoryState(id) {
+    if (id === currentActiveTab) return;
+    
+    const isCurrentTab = mainTabs.includes(currentActiveTab);
+    const isTargetTab = mainTabs.includes(id);
+
+    if (isTargetTab) {
+        if (id === 'home') {
+            // Unwind tab states cleanly by backing browser history instead of appending new states
+            if (currentActiveTab !== 'home') {
+                window.history.back();
+            }
+        } else {
+            if (currentActiveTab === 'home') {
+                // First tab state push on top of Home root
+                window.history.pushState({id: id}, '', '');
+            } else if (isCurrentTab) {
+                // Overwrite active tab state with replaceState to prevent navigation loops
+                window.history.replaceState({id: id}, '', '');
+            } else {
+                window.history.replaceState({id: id}, '', '');
+            }
+        }
+    } else {
+        // Deep nested layers: push state for clean back steps
+        window.history.pushState({id: id}, '', '');
+    }
+    currentActiveTab = id;
+}
+
+function routeToState(id, isBack = false) {
+    currentActiveTab = id;
+    if (id === 'home') { showHomePanel(true); }
+    else if (id === 'wallet') { showWallet(true); }
+    else if (id === 'profile') { showProfile(true); }
+    else if (id === 'top') { showTopWinners(true); }
+    else if (id === 'refer') { showReferral(true); }
+    else if (id === 'addmoney') { startRechargeFlow(true); }
+    else if (id === 'withdraw') { openWithdrawalSection(true); }
+    else if (id === 'edit-profile') { openEditProfile(true); }
+    else if (id === 'updates') { showUpdatesList(true); }
+    else if (id === 'notifications') { showNotifications(true); }
+    else if (id === 'history') { showTransactionHistory(true); }
+    else if (id === 'game-matches') { openGameMatches(null, true); }
+    else if (id === 'my-matches') { openMyMatches(null, true); }
+    else if (id === 'match-details') { 
+        hideAllSections(); 
+        document.getElementById('match-details-section').style.display = 'block'; 
+    }
+    else { showHomePanel(true); }
+}
+
+// ==========================================
+// SWIPE NAVIGATION ENGINE
+// ==========================================
+function initSwipeNavigation() {
+    document.querySelectorAll('.page-section').forEach(section => {
+        section.addEventListener('touchstart', (e) => {
+            swipeStartX = e.touches[0].clientX;
+            swipeStartY = e.touches[0].clientY;
+        }, { passive: true });
+
+        section.addEventListener('touchend', (e) => {
+            const diffX = e.changedTouches[0].clientX - swipeStartX;
+            const diffY = e.changedTouches[0].clientY - swipeStartY;
+
+            // Trigger horizontal sliding tab switches
+            if (Math.abs(diffX) > 80 && Math.abs(diffY) < 50) {
+                const currentIndex = tabsSequence.indexOf(currentActiveTab);
+                if (currentIndex !== -1) {
+                    if (diffX < 0) {
+                        // Swipe Left -> Next Tab
+                        if (currentIndex < tabsSequence.length - 1) {
+                            routeToState(tabsSequence[currentIndex + 1]);
+                        }
+                    } else {
+                        // Swipe Right -> Previous Tab
+                        if (currentIndex > 0) {
+                            routeToState(tabsSequence[currentIndex - 1]);
+                        }
+                    }
+                }
+            }
+        }, { passive: true });
+    });
+}
+
+// ==========================================
+// PULL TO REFRESH LOGIC
+// ==========================================
+let pStartY = 0, pCurrentY = 0, isRefreshing = false;
+const ptrWrapper = document.getElementById('ptr-wrapper');
+
+document.querySelectorAll('.page-section').forEach(section => {
+    let lastScrollTop = 0;
+    section.addEventListener('scroll', function() {
+        let st = this.scrollTop;
+        const bottomNav = document.getElementById('bottom-nav');
+        if (st > lastScrollTop && st > 30) {
+            bottomNav.classList.add('hide-nav');
+        } else {
+            bottomNav.classList.remove('hide-nav');
+        }
+        lastScrollTop = st <= 0 ? 0 : st;
+    }, { passive: true });
+
+    section.addEventListener('touchstart', e => { 
+        if(section.scrollTop <= 0 && !isRefreshing) pStartY = e.touches[0].clientY; 
+    }, {passive: true});
+    
+    section.addEventListener('touchmove', e => {
+        if(section.scrollTop <= 0 && pStartY > 0 && !isRefreshing) {
+            pCurrentY = e.touches[0].clientY;
+            let pull = pCurrentY - pStartY;
+            if(pull > 0 && pull < 150) { ptrWrapper.style.transform = `translateY(${pull - 80}px)`; }
+        }
+    }, {passive: true});
+    
+    section.addEventListener('touchend', e => {
+        if(section.scrollTop <= 0 && pStartY > 0 && !isRefreshing) {
+            let pull = pCurrentY - pStartY;
+            if(pull > 70) {
+                isRefreshing = true;
+                ptrWrapper.style.transform = `translateY(20px)`;
+                ptrWrapper.classList.add('ptr-spin');
+                refreshAppData(); 
+            } else { ptrWrapper.style.transform = `translateY(-80px)`; }
+        }
+        pStartY = 0; pCurrentY = 0;
+    }, {passive: true});
+});
+
+async function refreshAppData() {
+    try {
+        if (currentActiveTab === 'profile') {
+            if(auth.currentUser) {
+                const userSnap = await getDoc(doc(db, "users", auth.currentUser.uid));
+                if(userSnap.exists()) {
+                    currentUserDoc = userSnap.data();
+                    updateUIWithUserData();
+                }
+            }
+        } else if (currentActiveTab === 'top') {
+            await fetchTopPlayers();
+        } else {
+            await fetchUIControls(); 
+            if(auth.currentUser) { 
+                await loadRecentTransactions(auth.currentUser.uid); 
+                const userSnap = await getDoc(doc(db, "users", auth.currentUser.uid));
+                if(userSnap.exists()) {
+                    currentUserDoc = userSnap.data();
+                    updateUIWithUserData();
+                }
+            }
+        }
+    } catch(e){}
+    setTimeout(() => {
+        isRefreshing = false; ptrWrapper.classList.remove('ptr-spin'); ptrWrapper.style.transform = `translateY(-80px)`;
+    }, 100); 
+}
+
+// ==========================================
+// MATCH CARD SHADOW SKELETON REFRESH RENDERING
+// ==========================================
+function renderMatchSkeletonLoader() {
+    const wrapper = document.getElementById('matches-wrapper');
+    if(!wrapper) return;
+    wrapper.innerHTML = `
+        <div class="match-shimmer-card">
+            <div class="shimmer-anim msh-banner"></div>
+            <div class="msh-row">
+                <div class="shimmer-anim msh-logo"></div>
+                <div style="display:flex; flex-direction:column; gap:6px;">
+                    <div class="shimmer-anim msh-text-1"></div>
+                    <div class="shimmer-anim msh-text-2"></div>
+                </div>
+            </div>
+            <div class="msh-grid">
+                <div class="shimmer-anim msh-box"></div>
+                <div class="shimmer-anim msh-box"></div>
+                <div class="shimmer-anim msh-box"></div>
+            </div>
+        </div>
+    `;
+}
+
+// ==========================================
+// UPDATE USER INTERFACE PARAMETERS
+// ==========================================
+function updateUIWithUserData() {
+    if (!currentUserDoc) return;
+    
+    const elements = {
+        'ui-live-balance': parseFloat(currentUserDoc.balance || 0).toFixed(0),
+        'w-total-bal': parseFloat(currentUserDoc.balance || 0).toFixed(0),
+        'w-dep-bal': parseFloat(currentUserDoc.balance - (currentUserDoc.winningCash || 0) - (currentUserDoc.bonusCash || 0)).toFixed(0),
+        'w-win-bal': parseFloat(currentUserDoc.winningCash || 0).toFixed(0),
+        'w-bon-bal': parseFloat(currentUserDoc.bonusCash || 0).toFixed(0),
+        'pro-name-show': currentUserDoc.gameId || currentUserDoc.username,
+        'pro-uid-val': currentUserDoc.gameUid || auth.currentUser.uid.substring(0, 8).toUpperCase(),
+        'pro-tot-bal': parseFloat(currentUserDoc.balance || 0).toFixed(0),
+        'pro-stat-matches': currentUserDoc.matchesPlayed || 0,
+        'pro-stat-kills': currentUserDoc.totalKills || 0
+    };
+
+    for (const [id, val] of Object.entries(elements)) {
+        const el = document.getElementById(id);
+        if (el) {
+            if (el.classList.contains('counter')) {
+                el.setAttribute('data-target', val);
+            } else {
+                el.innerText = val;
+            }
+        }
+    }
+
+    const depShow = document.getElementById('am-dep-show');
+    if (depShow) depShow.innerText = parseFloat(currentUserDoc.balance - (currentUserDoc.winningCash || 0) - (currentUserDoc.bonusCash || 0)).toFixed(0);
+
+    const winShow = document.getElementById('wm-bal-show');
+    if (winShow) winShow.innerText = parseFloat(currentUserDoc.winningCash || 0).toFixed(0);
+
+    const proAvatar = document.getElementById('pro-avatar-img');
+    if (proAvatar && currentUserDoc.avatar_url) {
+        proAvatar.src = currentUserDoc.avatar_url;
+    }
+}
+
+// ==========================================
+// SECURE DYNAMIC STATUS COMPUTER FOR REALTIME CHECKS
+// ==========================================
+function getMatchEffectiveStatus(m) {
+    const now = Date.now();
+    if (m.status === 'completed' || m.status === 'results') {
+        return 'completed';
+    }
+    if (m.timestamp <= now) {
+        return 'live';
+    }
+    return m.status || 'upcoming';
+}
+
+// ==========================================
+// REAL-TIME TOURNAMENT FETCH & RENDER LOGIC
+// ==========================================
+let currentMatchGame = null;
+let currentMatchTab = 'upcoming';
+let currentMatchSubTab = 'ALL';
+let allLiveMatches = [];
+
+window.openGameMatches = function(gameName, isBack = false) {
+    if(!isBack) pushHistoryState('game-matches');
+    hideAllSections();
+    if(gameName) {
+        currentMatchGame = gameName;
+        document.getElementById('gm-title').innerText = gameName;
+    }
+    document.getElementById('game-matches-section').style.display = 'block';
+    
+    renderMatchSkeletonLoader();
+
+    document.querySelectorAll('#game-matches-section .m-tab').forEach(btn => {
+        btn.onclick = function() {
+            document.querySelectorAll('#game-matches-section .m-tab').forEach(b => b.classList.remove('active'));
+            this.classList.add('active');
+            currentMatchTab = this.getAttribute('data-tab');
+            
+            if(currentMatchTab === 'upcoming') {
+                document.getElementById('gm-sub-tabs').style.display = 'flex';
+            } else {
+                document.getElementById('gm-sub-tabs').style.display = 'none';
+            }
+            
+            renderMatchSkeletonLoader();
+            setTimeout(() => {
+                renderLiveMatchCards();
+            }, 250);
+        }
+    });
+
+    document.getElementById('gm-sub-tab-select').addEventListener('change', function(e) {
+        currentMatchSubTab = e.target.value;
+        renderMatchSkeletonLoader();
+        setTimeout(() => {
+            renderLiveMatchCards();
+        }, 200);
+    });
+
+    document.querySelectorAll('#game-matches-section .m-tab').forEach(b => b.classList.remove('active'));
+    document.querySelector('#game-matches-section .m-tab[data-tab="upcoming"]').classList.add('active');
+    currentMatchTab = 'upcoming';
+    currentMatchSubTab = 'ALL';
+    document.getElementById('gm-sub-tab-select').value = 'ALL';
+    document.getElementById('gm-sub-tabs').style.display = 'flex';
+
+    resetAppScroll();
+    fetchLiveMatches();
+}
+
+function fetchLiveMatches() {
+    if (unsubscribeMatches) {
+        unsubscribeMatches();
+        unsubscribeMatches = null;
+    }
+    
+    const matchesRef = query(collection(db, "tournaments"), orderBy("timestamp", "asc"));
+    unsubscribeMatches = onSnapshot(matchesRef, (snapshot) => {
+        allLiveMatches = [];
+        snapshot.forEach(doc => {
+            let d = doc.data();
+            d.dbId = doc.id;
+            allLiveMatches.push(d);
+        });
+        setTimeout(() => {
+            renderLiveMatchCards();
+        }, 150);
+    });
+}
+
+window.openPrizeModal = function(name, type, details) {
+    document.getElementById('pz-match-name').innerText = `${name} | ${type}`;
+    document.getElementById('pz-details-txt').innerHTML = details.replace(/\n/g, '<br>');
+    document.getElementById('prize-modal').style.display = 'flex';
+}
+window.closePrizeModal = function() { document.getElementById('prize-modal').style.display = 'none'; }
+
+// ==========================================
+// DETAILED MATCH SHEET COMPONENT BINDER
+// ==========================================
+window.openMatchDetails = function(matchId) {
+    const m = allLiveMatches.find(match => match.dbId === matchId);
+    if (!m) return;
+
+    pushHistoryState('match-details');
+    hideAllSections();
+    
+    const detailsSec = document.getElementById('match-details-section');
+    detailsSec.style.display = 'block';
+    resetAppScroll();
+
+    document.getElementById('md-header-title').innerText = m.matchTitle;
+    document.getElementById('md-match-name').innerText = `${m.matchTitle} | ${m.matchId}`;
+    
+    const isLive = getMatchEffectiveStatus(m) === 'live';
+    const bannerContainer = document.getElementById('md-banner-container');
+    const vsContainer = document.getElementById('md-vs-display');
+
+    if (isLive) {
+        bannerContainer.style.display = 'none';
+        vsContainer.style.display = 'flex';
+        
+        document.getElementById('md-p1-id').innerText = m.player1Name || "TEAM ALPHA";
+        document.getElementById('md-p2-id').innerText = m.player2Name || "TEAM OMEGA";
+        document.getElementById('md-p1-logo').src = m.player1Logo || "https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png";
+        document.getElementById('md-p2-logo').src = m.player2Logo || "https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png";
+    } else {
+        vsContainer.style.display = 'none';
+        bannerContainer.style.display = 'block';
+        document.getElementById('md-banner-img').src = m.bannerUrl || "";
+    }
+
+    // Populate Chips
+    document.getElementById('md-chip-type').innerText = m.matchType;
+    document.getElementById('md-chip-version').innerText = m.version || "TPP";
+    document.getElementById('md-chip-map').innerText = m.map;
+    document.getElementById('md-chip-paid').innerText = m.entryFee == 0 ? "Free" : "Paid";
+    document.getElementById('md-chip-fee').innerText = m.entryFee;
+    document.getElementById('md-chip-schedule').innerText = m.timeString;
+
+    // Default Rules and Description text
+    document.getElementById('md-prize-desc').innerText = `Total Pool: INR ${m.prizePool}`;
+    document.getElementById('md-about-html').innerHTML = m.prizeDetails ? m.prizeDetails.replace(/\n/g, '<br>') : "No custom rules populated.";
+    document.getElementById('md-full-prize-breakdown').innerText = m.prizeDetails || "Prize breakdown not specified.";
+
+    // Action button configuration
+    const actionBtn = document.getElementById('md-primary-btn');
+    const actionBtnTxt = document.getElementById('md-primary-btn-text');
+    
+    if (isLive) {
+        actionBtn.style.background = "#ef4444";
+        actionBtnTxt.innerHTML = `<i class="fa-brands fa-youtube"></i> SPECTATE`;
+        actionBtn.onclick = function() {
+            if (m.streamUrl) window.open(m.streamUrl, '_blank');
+            else alert("No stream link attached for this live session yet.");
+        };
+    } else if (getMatchEffectiveStatus(m) === 'completed') {
+        actionBtn.style.background = "#a855f7";
+        actionBtnTxt.innerHTML = `<i class="fa-solid fa-square-poll-vertical"></i> RESULTS`;
+        actionBtn.onclick = function() { alert("Results are being uploaded by admin."); };
+    } else {
+        const total = m.totalSpots || 100;
+        const joined = m.joinedSpots || 0;
+        
+        if (joined >= total) {
+            actionBtn.style.background = "#ef4444";
+            actionBtnTxt.innerText = "MATCH FULL";
+            actionBtn.onclick = null;
+        } else {
+            actionBtn.style.background = "#10b981";
+            actionBtnTxt.innerText = `JOIN NOW (₹${m.entryFee})`;
+            actionBtn.onclick = function() { alert("Match join procedure launched."); };
+        }
+    }
+
+    switchMdTab('rules');
+}
+
+window.switchMdTab = function(tabName) {
+    document.querySelectorAll('.md-tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelectorAll('.md-tab-content').forEach(cont => cont.classList.remove('active'));
+    
+    const targetBtn = document.getElementById(`md-btn-${tabName}`);
+    const targetContent = document.getElementById(`md-tab-content-${tabName}`);
+    
+    if (targetBtn) targetBtn.classList.add('active');
+    if (targetContent) targetContent.classList.add('active');
+}
+
+function renderLiveMatchCards() {
+    const wrapper = document.getElementById('matches-wrapper');
+    if(!wrapper) return;
+    
+    let filtered = allLiveMatches.filter(m => {
+        if (m.gameName !== currentMatchGame) return false;
+        
+        const effStatus = getMatchEffectiveStatus(m);
+        
+        if (currentMatchTab === 'upcoming') {
+            return effStatus === 'upcoming';
+        } else if (currentMatchTab === 'live') {
+            return effStatus === 'live' || effStatus === 'ongoing';
+        } else if (currentMatchTab === 'completed') {
+            return effStatus === 'completed';
+        }
+        return false;
+    });
+    
+    if(currentMatchTab === 'upcoming' && currentMatchSubTab !== 'ALL') {
+        filtered = filtered.filter(m => m.matchType.toUpperCase() === currentMatchSubTab);
+    }
+
+    if(filtered.length === 0) {
+        let dispTab = currentMatchTab === 'live' ? 'LIVE' : currentMatchTab.toUpperCase();
+        let dispSub = currentMatchTab === 'upcoming' && currentMatchSubTab !== 'ALL' ? ` for ${currentMatchSubTab}` : '';
+        wrapper.innerHTML = `<div style="text-align:center; padding:40px 20px; color:#888;">No ${dispTab} matches found${dispSub}.</div>`;
+        return;
+    }
+
+    let html = '';
+    filtered.forEach(m => {
+        const total = m.totalSpots || 100;
+        const joined = m.joinedSpots || 0;
+        const percent = Math.min(((joined / total) * 100), 100);
+        const spotsLeft = Math.max((total - joined), 0);
+        const effStatus = getMatchEffectiveStatus(m);
+        
+        const entryHtml = m.entryFee == 0 ? 
+            `<span class="mc-stat-val free game-font">FREE</span>` : 
+            `<span class="mc-stat-val game-font flex-amt"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:18px; height:18px;"> ${m.entryFee}</span>`;
+        
+        let perKillHtml = '';
+        if(m.matchCategory === 'Clash Squad') {
+            perKillHtml = `<div class="mc-stat-val game-font" style="font-size:15px; color:#888;">N/A</div>`;
+        } else {
+            perKillHtml = `<div class="mc-stat-val game-font flex-amt"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:18px; height:18px;"> ${m.perKill || 0}</div>`;
+        }
+
+        let isUserJoined = Math.random() > 0.5; 
+        let joinedStatusHtml = isUserJoined ? 
+            `<div style="color:#4ade80; font-weight:bold; font-size:12px; display:flex; align-items:center; gap:4px;"><i class="fa-solid fa-circle-check"></i> Joined</div>` : 
+            `<div style="color:#ef4444; font-weight:bold; font-size:12px; display:flex; align-items:center; gap:4px;"><i class="fa-solid fa-circle-xmark"></i> Not Joined</div>`;
+
+        let cardCoverHtml = '';
+        let bottomRowHtml = '';
+        
+        // Dynamic View Resolver (Live tabs display bannerless VS graphics)
+        if (effStatus === 'live') {
+            const player1 = m.player1Name || "TEAM ALPHA";
+            const player2 = m.player2Name || "TEAM OMEGA";
+            const logo1 = m.player1Logo || "https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png";
+            const logo2 = m.player2Logo || "https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png";
+
+            cardCoverHtml = `
+            <div class="mc-vs-card-wrap">
+                <div class="mc-vs-player">
+                    <div class="mc-vs-avatar-frame">
+                        <div class="mc-vs-avatar-ring"></div>
+                        <img src="${logo1}" class="mc-vs-avatar">
+                    </div>
+                    <div class="mc-vs-player-id">${player1}</div>
+                </div>
+                <div class="mc-vs-divider">
+                    <div class="mc-vs-title-text">V/S</div>
+                    <div class="mc-live-status-wrap">
+                        <span class="mc-live-signal left-wave"></span>
+                        <span class="mc-live-dot-pulsar"></span>
+                        <span class="mc-live-signal right-wave"></span>
+                    </div>
+                </div>
+                <div class="mc-vs-player">
+                    <div class="mc-vs-avatar-frame">
+                        <div class="mc-vs-avatar-ring"></div>
+                        <img src="${logo2}" class="mc-vs-avatar">
+                    </div>
+                    <div class="mc-vs-player-id">${player2}</div>
+                </div>
+            </div>`;
+
+            bottomRowHtml = `
+            <div class="mc-bottom-row" style="margin-top:8px;">
+                ${joinedStatusHtml}
+                <button class="mc-btn-join" style="background:#ef4444;" onclick="event.stopPropagation(); window.openMatchDetails('${m.dbId}')"><i class="fa-brands fa-youtube"></i> WATCH LIVE</button>
+            </div>`;
+        } else {
+            cardCoverHtml = `
+            <div class="mc-banner-wrap">
+                <img src="${m.bannerUrl}" class="mc-banner">
+                <div class="mc-tags">
+                    <span class="mc-tag"><i class="fa-solid fa-star"></i> ${m.matchType}</span>
+                    <span class="mc-tag"><i class="fa-solid fa-location-dot"></i> ${m.map}</span>
+                </div>
+            </div>`;
+
+            if(effStatus === 'upcoming') {
+                let btnHtml = (joined >= total) ? 
+                    `<button class="mc-btn-join mc-btn-full" onclick="event.stopPropagation();">MATCH FULL</button>` : 
+                    `<button class="mc-btn-join" onclick="event.stopPropagation(); window.openMatchDetails('${m.dbId}')">JOIN NOW</button>`;
+                
+                bottomRowHtml = `
+                <div class="mc-bottom-row">
+                    <div class="mc-progress-wrap">
+                        <div class="mc-progress-bg">
+                            <div class="mc-progress-fill" style="width: ${percent}%;"></div>
+                        </div>
+                        <div class="mc-spots-txt"><span>Only ${spotsLeft} spots left</span><span>${joined}/${total}</span></div>
+                    </div>
+                    ${btnHtml}
+                </div>`;
+            } else {
+                bottomRowHtml = `
+                <div class="mc-bottom-row" style="margin-top:8px;">
+                    ${joinedStatusHtml}
+                    <button class="mc-btn-join" style="background:#a855f7;" onclick="event.stopPropagation(); window.openMatchDetails('${m.dbId}')"><i class="fa-solid fa-video"></i> WATCH MATCH</button>
+                </div>`;
+            }
+        }
+
+        html += `
+        <div class="match-card tactile-3d" onclick="window.openMatchDetails('${m.dbId}')">
+            ${cardCoverHtml}
+            <div class="mc-info-section">
+                <div class="mc-title-row">
+                    <div class="mc-logo-wrap"><img src="${m.logoUrl}"></div>
+                    <div style="flex-grow:1;">
+                        <div class="mc-title">${m.matchTitle} | ${m.matchId}</div>
+                        <div class="mc-time-container">
+                            <span class="mc-time">Time: ${m.timeString}</span>
+                            <span class="mc-countdown" data-time="${m.timestamp}" data-id="${m.dbId}">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mc-stats-grid">
+                    <div class="mc-stat-box" onclick="event.stopPropagation(); openPrizeModal('${m.matchTitle}', '${m.matchType}', \`${m.prizeDetails}\`)">
+                        <div class="mc-stat-lbl">PRIZE POOL <i class="fa-solid fa-angle-down"></i></div>
+                        <div class="mc-stat-val game-font flex-amt"><img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon" style="width:18px; height:18px;"> ${m.prizePool}</div>
+                    </div>
+                    <div class="mc-stat-box">
+                        <div class="mc-stat-lbl">PER KILL</div>
+                        ${perKillHtml}
+                    </div>
+                    <div class="mc-stat-box">
+                        <div class="mc-stat-lbl">ENTRY FEE</div>
+                        ${entryHtml}
+                    </div>
+                </div>
+
+                <div class="mc-meta-grid" style="margin-bottom:8px;">
+                    <div class="mc-meta-box"><div class="mc-meta-lbl">TYPE</div><div class="mc-meta-val">${m.matchType}</div></div>
+                    <div class="mc-meta-box"><div class="mc-meta-lbl">VERSION</div><div class="mc-meta-val">${m.version}</div></div>
+                    <div class="mc-meta-box"><div class="mc-meta-lbl">MAP</div><div class="mc-meta-val">${m.map}</div></div>
+                </div>
+
+                ${bottomRowHtml}
+            </div>
+        </div>`;
+    });
+    wrapper.innerHTML = html;
+}
+
+setInterval(() => {
+    document.querySelectorAll('.mc-countdown').forEach(el => {
+        let target = parseInt(el.getAttribute('data-time'));
+        let matchDbId = el.getAttribute('data-id');
+        let now = new Date().getTime();
+        let diff = target - now;
+        
+        if(diff <= 0) { 
+            el.innerHTML = `<span class="live-dot"></span> Live`; 
+            el.style.color = "#ff3366";
+            
+            let indexToUpdate = allLiveMatches.findIndex(m => m.dbId === matchDbId);
+            if(indexToUpdate !== -1 && allLiveMatches[indexToUpdate].status === 'upcoming') {
+                allLiveMatches[indexToUpdate].status = 'live';
+                renderLiveMatchCards();
+            }
+        }
+        else {
+            let d = Math.floor(diff / (1000 * 60 * 60 * 24));
+            let h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            let m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            let s = Math.floor((diff % (1000 * 60)) / 1000);
+            let timeStr = "";
+            if(d > 0) timeStr += `${d}d `;
+            timeStr += `${h}h ${m}m ${s}s`;
+            el.innerText = `(${timeStr})`;
+            el.style.color = "#ffffff"; 
+        }
+    });
+}, 1000);
+
+window.openMyMatches = function(tabName, isBack = false) {
+    if(!isBack) pushHistoryState('my-matches');
+    hideAllSections();
+    document.getElementById('my-matches-section').style.display = 'block';
+    setMyMatchesTab(tabName);
+    resetAppScroll();
+}
+
+window.setMyMatchesTab = function(tabName) {
+    document.getElementById('mm-tab-live').classList.remove('active');
+    document.getElementById('mm-tab-upcoming').classList.remove('active');
+    document.getElementById('mm-tab-completed').classList.remove('active');
+    document.getElementById('mm-tab-' + tabName).classList.add('active');
+}
+
+// ==========================================
+// EMAIL VALIDATION & REFERRAL PROMO LOGIC
+// ==========================================
+window.emailValidation = async function() {
+    const emailBox = document.getElementById('reg-email');
+    const icon = document.getElementById('email-check-icon');
+    const msg = document.getElementById('email-validation-msg');
+    const emailStr = emailBox.value.trim();
+    const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if(emailStr.length === 0) { icon.style.display = 'none'; msg.style.display = 'none'; emailBox.style.borderColor = '#111'; return; }
+    if(emailPattern.test(emailStr)) { icon.style.display = 'block'; icon.className = 'fa-solid fa-circle-check'; icon.style.color = '#4ade80'; msg.style.display = 'block'; msg.style.color = '#4ade80'; msg.innerText = "Valid Email Address"; emailBox.style.borderColor = '#4ade80'; } else { icon.style.display = 'block'; icon.className = 'fa-solid fa-circle-xmark'; icon.style.color = '#ff3366'; msg.style.display = 'block'; msg.style.color = '#ff3366'; msg.innerText = "Fake or Invalid Email Format"; emailBox.style.borderColor = '#ff3366'; }
+}
+
+window.verifyPromo = async function() {
+    const code = document.getElementById('reg-promo').value.trim();
+    if(!code) { alert("Please enter a referral code first."); return; }
+    showLoader(true);
+    try { const refQuery = query(collection(db, "users"), where("referralCode", "==", code)); const refSnap = await getDocs(refQuery); if(refSnap.empty) { alert("❌ Invalid Referral Code!"); document.getElementById('reg-promo').value = ''; } else { alert("✅ Valid Code! Applied."); } showLoader(false); } catch(e) { showLoader(false); alert("Error checking code."); }
+}
+
+// ==========================================
+// AUTHENTICATION SECURITY LOGIC
+// ==========================================
+window.togglePassword = function(inputId, iconElement) { const input = document.getElementById(inputId); if (input.type === "password") { input.type = "text"; iconElement.classList.replace("fa-eye", "fa-eye-slash"); iconElement.style.color = "var(--input-focus)"; } else { input.type = "password"; iconElement.classList.replace("fa-eye-slash", "fa-eye"); iconElement.style.color = "var(--input-icon-placeholder)"; } }
+function hideAuthMsgs() { ['reg', 'log', 'forgot'].forEach(id => { let el = document.getElementById(id + '-msg'); if(el) { el.style.display = 'none'; el.style.backgroundColor = 'transparent'; el.style.border = 'none'; }});}
+function showAuthMsg(form, msg, isSuccess = false) { hideAuthMsgs(); let el = document.getElementById(form + '-msg'); el.innerText = msg; el.style.display = 'block'; if(isSuccess) { el.style.color = '#4ade80'; el.style.backgroundColor = 'rgba(74, 222, 128, 0.1)'; el.style.border = '1px solid #4ade80'; } else { el.style.color = '#f87171'; el.style.backgroundColor = 'rgba(248, 113, 113, 0.1)'; el.style.border = '1px solid #f87171'; } }
+
+// Premium Card Entrance Reset on Form Swaps
+function restartAuthAnimation() {
+    const forms = document.querySelectorAll('.form-container');
+    forms.forEach(f => {
+        f.style.animation = 'none';
+        f.offsetHeight; // Trigger reflow to restart CSS animation keyframes
+        f.style.animation = 'formPopIn 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) forwards';
+        
+        // Also trigger child elements' animations dynamically
+        const children = f.querySelectorAll('.input-group, .btn-submit');
+        children.forEach(c => {
+            c.style.animation = 'none';
+            c.offsetHeight; // reflow
+            c.style.animation = ''; // restore styles defined in style.css
+        });
+    });
+}
+
+window.showLogin = function() { hideAuthMsgs(); document.getElementById('register-form').style.display = 'none'; document.getElementById('forgot-form').style.display = 'none'; document.getElementById('login-form').style.display = 'block'; restartAuthAnimation(); }
+window.showRegister = function() { hideAuthMsgs(); document.getElementById('login-form').style.display = 'none'; document.getElementById('forgot-form').style.display = 'none'; document.getElementById('register-form').style.display = 'block'; restartAuthAnimation(); }
+
+// ================= FORGOT PASSWORD INITIATION =================
+window.showForgot = function() { 
+    hideAuthMsgs(); 
+    document.getElementById('login-form').style.display = 'none'; 
+    document.getElementById('register-form').style.display = 'none'; 
+    document.getElementById('forgot-form').style.display = 'block'; 
+    restartAuthAnimation(); 
+    
+    // Correct Flow Step Reset
+    document.getElementById('forgot-header-wrap').style.display = 'block'; 
+    document.getElementById('forgot-instruction').innerText = "Tournament Verification";
+    document.getElementById('forgot-step-1').style.display = 'block'; 
+    document.getElementById('forgot-step-2').style.display = 'none'; 
+    document.getElementById('forgot-step-3').style.display = 'none'; 
+    document.getElementById('forgot-success').style.display = 'none'; 
+    
+    // Reset Inputs
+    document.getElementById('forgot-email').value = '';
+    document.getElementById('otp-1').value = '';
+    document.getElementById('otp-2').value = '';
+    document.getElementById('otp-3').value = '';
+    document.getElementById('otp-4').value = '';
+    document.getElementById('forgot-new-pwd').value = '';
+    document.getElementById('forgot-conf-pwd').value = '';
+}
+
+function showLoader(state, text = "Processing...") { document.getElementById('loader-text').innerText = text; document.getElementById('full-loader').style.display = state ? 'flex' : 'none'; }
+function generateRefCode() { return Math.random().toString(36).substring(2, 8).toUpperCase(); }
+
+// ==========================================
+// OPTIMIZED CONFETTI SYSTEM
+// ==========================================
+let confettiActive = false;
+window.fireCanvasConfetti = function() {
+    if(confettiActive) return; 
+    confettiActive = true; 
+    const canvas = document.getElementById('confetti-canvas'); 
+    const ctx = canvas.getContext('2d'); 
+    canvas.style.display = 'block'; 
+    canvas.width = canvas.offsetWidth; 
+    canvas.height = canvas.offsetHeight;
+    
+    const pieces = []; 
+    const colors = ['#ff3366', '#a855f7', '#00ffcc', '#facc15', '#ffffff', '#4ade80']; 
+    const maxPieces = 80; 
+    
+    for(let i = 0; i < maxPieces; i++) { 
+        pieces.push({ 
+            x: Math.random() * canvas.width, 
+            y: Math.random() * Math.random() * canvas.height - canvas.height, 
+            w: Math.random() * 8 + 4, 
+            h: Math.random() * 12 + 6, 
+            color: colors[Math.floor(Math.random() * colors.length)], 
+            speed: Math.random() * 4 + 3, 
+            drift: Math.random() * 1.5 - 0.75, 
+            rot: Math.random() * 360, 
+            rotSpeed: Math.random() * 8 - 4 
+        });
+    }
+    
+    function updateAndDraw() { 
+        if (!confettiActive) return;
+        ctx.clearRect(0, 0, canvas.width, canvas.height); 
+        let activePieces = 0; 
+        
+        for(let i = 0; i < pieces.length; i++) { 
+            let p = pieces[i]; 
+            if(p.y > canvas.height + 50) continue; 
+            activePieces++; 
+            p.y += p.speed; 
+            p.x += p.drift; 
+            p.rot += p.rotSpeed; 
+            
+            ctx.save(); 
+            ctx.translate(p.x, p.y); 
+            ctx.rotate(p.rot * Math.PI / 180); 
+            ctx.fillStyle = p.color; 
+            ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h); 
+            ctx.restore(); 
+        } 
+        
+        if(activePieces > 0 && confettiActive) { 
+            requestAnimationFrame(updateAndDraw); 
+        } else { 
+            cleanupConfetti();
+        } 
+    }
+    
+    function cleanupConfetti() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.style.display = 'none'; 
+        confettiActive = false;
+    }
+    
+    updateAndDraw(); 
+    setTimeout(() => { 
+        if(confettiActive){ 
+            cleanupConfetti();
+        } 
+    }, 8000);
+}
+
+window.doRegister = async function(btn) {
+    const originalText = btn.innerText;
+    const fn = document.getElementById('reg-first').value.trim(); const ln = document.getElementById('reg-last').value.trim(); const user = document.getElementById('reg-user').value.trim(); const phoneVal = document.getElementById('reg-phone').value.trim(); const email = document.getElementById('reg-email').value.trim(); const pass = document.getElementById('reg-pwd').value.trim(); const promo = document.getElementById('reg-promo').value.trim();
+    if(!fn || !ln || !user || !phoneVal || !email || !pass) { showAuthMsg('reg', 'Please fill all required fields!'); return; } 
+    if(pass.length < 6) { showAuthMsg('reg', 'Password must be at least 6 characters!'); return; } 
+    const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/; if(!emailPattern.test(email)) { showAuthMsg('reg', 'Fake or Invalid Email format!'); return; }
+    const phone = "+91" + phoneVal; 
+    
+    btn.innerText = "Processing..."; btn.disabled = true; btn.style.pointerEvents = 'none'; showLoader(true);
+    try {
+        const userQuery = query(collection(db, "users"), where("username", "==", user)); const userSnap = await getDocs(userQuery); if(!userSnap.empty) { throw new Error('Username is already taken!'); }
+        const phoneQuery = query(collection(db, "users"), where("phone", "==", phone)); const phoneSnap = await getDocs(phoneQuery); if(!phoneSnap.empty) { throw new Error('This Phone Number is already registered!'); }
+        let referredBy = null; if(promo) { const refQuery = query(collection(db, "users"), where("referralCode", "==", promo)); const refSnap = await getDocs(refQuery); if(refSnap.empty) { throw new Error('Invalid Referral Code!'); } referredBy = refSnap.docs[0].id; }
+        const cred = await createUserWithEmailAndPassword(auth, email, pass); const uid = cred.user.uid; const now = new Date();
+        await setDoc(doc(db, "users", uid), { firstName: fn, lastName: ln, username: user, phone: phone, email: email, password: pass, balance: 0, winningCash: 0, bonusCash: 0, todayEarnings: 0, leaderboardWinnings: 0, lastLeaderboardUpdate: now.toDateString(), status: 'active', uidStatus: '', gameId: '', gameUid: '', referralCode: generateRefCode(), referredBy: referredBy, createdAt: now.toISOString().replace('T', ' ').substring(0, 19), timestamp: now.getTime() });
+        sessionStorage.setItem('triggerConfetti', 'true'); 
+    } catch(e) { 
+        let msg = e.message; if(e.code === 'auth/email-already-in-use') msg = 'Email is already registered!'; else if(e.code === 'auth/invalid-email') msg = 'Invalid Email format!'; 
+        showAuthMsg('reg', msg); 
+    } finally {
+        showLoader(false); btn.innerText = originalText; btn.disabled = false; btn.style.pointerEvents = 'auto';
+    }
+}
+
+window.doLogin = async function(btn) {
+    const originalText = btn.innerText;
+    const idInput = document.getElementById('log-id').value.trim(); const pass = document.getElementById('log-pwd').value.trim(); 
+    if(!idInput || !pass) { showAuthMsg('log', 'Please enter Phone or Email & Password!'); return; } 
+    
+    btn.innerText = "Processing..."; btn.disabled = true; btn.style.pointerEvents = 'none'; showLoader(true);
+    try { 
+        let loginEmail = idInput; 
+        if (/^\d{10}$/.test(idInput)) { const phoneStr = "+91" + idInput; const uQuery = query(collection(db, "users"), where("phone", "==", phoneStr)); const uSnap = await getDocs(uQuery); if(uSnap.empty) { throw new Error('Phone number not registered!'); } loginEmail = uSnap.docs[0].data().email; } else if (!idInput.includes('@')) { throw new Error('Please enter a valid Phone Number or Email!'); }
+        await signInWithEmailAndPassword(auth, loginEmail, pass); sessionStorage.setItem('triggerConfetti', 'true'); 
+    } catch(e) { 
+        let msg = e.message; if(e.code === 'auth/user-not-found' || e.code === 'auth/invalid-login-credentials') msg = 'Login Failed: Invalid Credentials!'; else if(e.code === 'auth/too-many-requests') msg = 'Too many attempts. Try again later.'; 
+        showAuthMsg('log', msg); 
+    } finally {
+        showLoader(false); btn.innerText = originalText; btn.disabled = false; btn.style.pointerEvents = 'auto';
+    }
+}
+
+// ================= OTP GENERATION AND ROUTING =================
+let resetEmail = ""; let resetDocId = ""; let resetOldPassword = ""; let generatedOTP = "";
+window.handleOtpInput = function(current, nextFieldID) { if (current.value.length >= 1) { current.value = current.value.slice(0, 1); if(nextFieldID) document.getElementById(nextFieldID).focus(); } }
+window.handleOtpBackspace = function(e, prevFieldID, currentID) { if(e.key === 'Backspace') { const currentBox = document.getElementById(currentID); if(currentBox.value === '' && prevFieldID) { const prevBox = document.getElementById(prevFieldID); prevBox.focus(); prevBox.value = ''; } else { currentBox.value = ''; } } }
+
+window.sendOTP = async function(btn) {
+    if(isSendingOTP) return; 
+    const email = document.getElementById('forgot-email').value.trim(); 
+    if(!email || !email.includes("@")) { showAuthMsg('forgot', 'Please enter a valid registered email address!'); return; } 
+    
+    isSendingOTP = true; 
+    const originalText = btn.innerText; 
+    btn.innerText = "Sending..."; btn.disabled = true; btn.style.pointerEvents = 'none'; 
+    showLoader(true);
+    
+    try { 
+        const q = query(collection(db, "users"), where("email", "==", email)); const snap = await getDocs(q); if(snap.empty) { throw new Error('Email not registered in database'); } 
+        resetDocId = snap.docs[0].id; resetOldPassword = snap.docs[0].data().password; resetEmail = email; 
+        
+        const ejsDoc = await getDoc(doc(db, "admin_settings", "emailjs_config")); 
+        if(!ejsDoc.exists() || !ejsDoc.data().publicKey) { throw new Error('Error: Email Server is not configured by Admin!'); } 
+        const ejsData = ejsDoc.data(); 
+        
+        generatedOTP = Math.floor(1000 + Math.random() * 9000).toString(); 
+        
+        await emailjs.send(
+            ejsData.serviceId, 
+            ejsData.templateId, 
+            { to_email: email, otp: generatedOTP }, 
+            ejsData.publicKey
+        ); 
+        
+        document.getElementById('forgot-step-1').style.display = 'none'; 
+        document.getElementById('forgot-step-2').style.display = 'block'; 
+        document.getElementById('forgot-instruction').innerText = "Check your inbox for the code."; 
+        showAuthMsg('forgot', 'OTP sent successfully to ' + email, true); 
+        setTimeout(() => { document.getElementById('otp-1').focus(); }, 300); 
+    } catch(e) { 
+        showAuthMsg('forgot', 'Failed: ' + (e.text || e.message)); 
+    } finally { 
+        showLoader(false); btn.innerText = originalText; btn.disabled = false; btn.style.pointerEvents = 'auto'; 
+        isSendingOTP = false; 
+    }
+}
+
+window.verifyOTP = function() { 
+    let finalOTP = document.getElementById('otp-1').value + document.getElementById('otp-2').value + document.getElementById('otp-3').value + document.getElementById('otp-4').value; 
+    if(finalOTP.length !== 4) { showAuthMsg('forgot', 'Please enter full 4-Digit OTP!'); return; } 
+    if(finalOTP === generatedOTP) { 
+        document.getElementById('forgot-step-2').style.display = 'none'; 
+        document.getElementById('forgot-step-3').style.display = 'block'; 
+        document.getElementById('forgot-instruction').innerText = "Set your new secure password."; 
+        showAuthMsg('forgot', '✅ OTP Verified! Create a new password.', true); 
+    } else { 
+        showAuthMsg('forgot', '❌ Invalid OTP! Please check again.'); 
+    } 
+}
+
+window.changePassword = async function(btn) { 
+    const newPass = document.getElementById('forgot-new-pwd').value.trim(); const confPass = document.getElementById('forgot-conf-pwd').value.trim(); 
+    if(newPass.length < 6) { showAuthMsg('forgot', 'Password must be at least 6 characters!'); return; } 
+    if(newPass !== confPass) { showAuthMsg('forgot', 'Passwords do not match! Please check.'); return; } 
+    
+    const originalText = btn.innerText; btn.innerText = "Updating..."; btn.disabled = true; btn.style.pointerEvents = 'none'; showLoader(true); isResettingPassword = true; 
+    try { 
+        const cred = await signInWithEmailAndPassword(auth, resetEmail, resetOldPassword); 
+        await updatePassword(cred.user, newPass); 
+        await setDoc(doc(db, "users", resetDocId), { password: newPass }, { merge: true }); 
+        await signOut(auth); 
+        
+        // Correct transition to Final Congratulations Celebration Screen
+        document.getElementById('forgot-header-wrap').style.display = 'none'; 
+        document.getElementById('forgot-step-3').style.display = 'none'; 
+        document.getElementById('forgot-success').style.display = 'block'; 
+        fireCanvasConfetti(); 
+        
+        setTimeout(() => { isResettingPassword = false; showLogin(); }, 4000); 
+    } catch(e) { 
+        isResettingPassword = false; 
+        showAuthMsg('forgot', 'Error changing password: ' + e.message); 
+    } finally { 
+        showLoader(false); btn.innerText = originalText; btn.disabled = false; btn.style.pointerEvents = 'auto'; 
+    }
+}
+
+window.logoutUser = async function() { 
+    if(confirm("Are you sure you want to log out?")) { 
+        showLoader(true, "Logging Out...");
+        try { await signOut(auth); setTimeout(() => { window.location.reload(); }, 800); } catch(e) { showLoader(false); alert("Logout failed: " + e.message); }
+    } 
+}
+
+function runCounters() {
+    const counters = document.querySelectorAll('.counter'); const speed = 50; 
+    counters.forEach(counter => {
+        const target = +counter.getAttribute('data-target'); if(target === 0) { counter.innerText = '0'; return; }
+        const updateCount = () => { const count = +counter.innerText; const inc = target / speed; if (count < target) { counter.innerText = Math.ceil(count + inc); setTimeout(updateCount, 20); } else { counter.innerText = target; } };
+        updateCount();
+    });
+}
+
+async function loadRecentTransactions(uid) {
+    try {
+        let trx = [];
+        const depSnap = await getDocs(query(collection(db, "deposits"), where("userId", "==", uid))); depSnap.forEach(d => { let t = d.data(); t.type = 'deposit'; trx.push(t); });
+        const witSnap = await getDocs(query(collection(db, "withdrawals"), where("userId", "==", uid))); witSnap.forEach(d => { let t = d.data(); t.type = 'withdrawal'; trx.push(t); });
+        trx.sort((a,b) => b.timestamp - a.timestamp); globalTransactions = trx; renderTransactions();
+    } catch(e) {}
+}
+
+function renderTransactions() {
+    let limitWallet = 3; let wHtml = ''; let fHtml = '';
+    if(globalTransactions.length === 0) { wHtml = '<div class="w-empty-state"><i class="fa-solid fa-receipt" style="font-size:26px; opacity:0.3; display:block; margin-bottom:8px;"></i>No transactions yet.</div>'; fHtml = wHtml; } else {
+        globalTransactions.forEach((t, i) => {
+            let dt = new Date(t.timestamp).toLocaleString(); let icon = t.type === 'deposit' ? '<i class="fa-solid fa-arrow-down"></i>' : '<i class="fa-solid fa-arrow-up"></i>'; let typeClass = t.type === 'deposit' ? 'dep' : 'wit'; let sign = t.type === 'deposit' ? '+' : '-'; let title = t.type === 'deposit' ? 'Deposit' : 'Withdrawal'; let method = t.type === 'deposit' ? (t.methodName || 'Wallet') : (t.upiId || 'Bank');
+            let stHtml = ''; if(t.status === 'pending') stHtml = '<span class="trx-status st-pend">Pending</span>'; else if(t.status === 'approved') stHtml = '<span class="trx-status st-appr">Success</span>'; else stHtml = '<span class="trx-status st-rej">Failed</span>';
+            let itemHtml = `<div class="trx-item tactile-3d"><div class="trx-left"><div class="trx-icon ${typeClass}">${icon}</div><div class="trx-details"><h4>${title}</h4><p>${dt}<br>${method}</p></div></div><div class="trx-right"><div class="trx-amt ${typeClass} game-font">${sign}₹${t.amount}</div>${stHtml}</div></div>`;
+            if(i < limitWallet) wHtml += itemHtml; fHtml += itemHtml;
+        });
+    }
+    document.getElementById('wallet-trx-list').innerHTML = wHtml; document.getElementById('full-trx-list').innerHTML = fHtml;
+}
+
+// ==========================================
+// DYNAMIC LEADERBOARD RANK BINDING ENGINE
+// ==========================================
+async function calculateUserRank(uid) {
+    try {
+        const topQuery = query(collection(db, "users"), orderBy("leaderboardWinnings", "desc"));
+        const snapshot = await getDocs(topQuery);
+        
+        let rank = 1;
+        let finalRank = 0;
+        
+        snapshot.forEach(docSnap => {
+            if(docSnap.id === uid) {
+                finalRank = rank;
+            }
+            rank++;
+        });
+        
+        const rankEl = document.getElementById('pro-stat-toprank');
+        if(rankEl) {
+            if(finalRank > 0) {
+                rankEl.innerText = `#${finalRank}`;
+                await updateDoc(doc(db, "users", uid), { topRank: finalRank });
+            } else {
+                rankEl.innerText = `#0`;
+            }
+        }
+    } catch(e) {
+        console.log("Leaderboard rank engine loading failed: ", e);
+    }
+}
+
+// ==========================================
+// 12:00 AM ROLLOVERS & WINNING DIFFERENTIAL LOGIC
+// ==========================================
+async function syncWinningsLeaderboardDaily(uid, userDoc) {
+    if (!userDoc) return;
+    
+    const now = new Date();
+    const todayStr = now.toDateString(); 
+    const lastUpdate = userDoc.lastLeaderboardUpdate || "";
+    
+    // Differential tracker sync
+    const oldWinningCash = parseFloat(sessionStorage.getItem('last_known_winning_cash') || userDoc.winningCash || 0);
+    const newWinningCash = parseFloat(userDoc.winningCash || 0);
+    let todayEarnings = parseFloat(userDoc.todayEarnings || 0);
+
+    if (newWinningCash > oldWinningCash) {
+        const diff = newWinningCash - oldWinningCash;
+        todayEarnings += diff;
+        await updateDoc(doc(db, "users", uid), {
+            todayEarnings: todayEarnings
+        });
+    }
+    sessionStorage.setItem('last_known_winning_cash', newWinningCash);
+
+    // Midnight rollover transition
+    if (lastUpdate && lastUpdate !== todayStr) {
+        const currentLbWinnings = parseFloat(userDoc.leaderboardWinnings || 0);
+        const newLbWinnings = currentLbWinnings + todayEarnings;
+        
+        await updateDoc(doc(db, "users", uid), {
+            leaderboardWinnings: newLbWinnings,
+            todayEarnings: 0,
+            lastLeaderboardUpdate: todayStr
+        });
+        
+        currentUserDoc.leaderboardWinnings = newLbWinnings;
+        currentUserDoc.todayEarnings = 0;
+        currentUserDoc.lastLeaderboardUpdate = todayStr;
+    } else if (!lastUpdate) {
+        await updateDoc(doc(db, "users", uid), {
+            lastLeaderboardUpdate: todayStr,
+            todayEarnings: 0,
+            leaderboardWinnings: parseFloat(userDoc.winningCash || 0)
+        });
+    }
+}
+
+// ==========================================
+// USER DATA STATE DETECTOR WITH LIVE NOTIFICATIONS SYNC
+// ==========================================
+function loadUserData(user) {
+    hideAllSections(); 
+    document.getElementById('app-container').style.opacity = '1'; 
+    const shimmer = document.getElementById('shimmer-screen'); 
+    shimmer.style.display = 'flex'; 
+    shimmer.style.opacity = '1';
+    
+    if(!window.history.state) { window.history.replaceState({id: 'home'}, '', ''); currentActiveTab = 'home'; }
+
+    const userDocRef = doc(db, "users", user.uid);
+    onSnapshot(userDocRef, async (docSnap) => {
+        if (docSnap.exists()) {
+            currentUserDoc = docSnap.data(); 
+            if(currentUserDoc.status !== 'active') { signOut(auth); alert("Your account is blocked! Contact Admin."); return; }
+            
+            const uidStat = currentUserDoc.uidStatus;
+            if(uidStat !== 'approved') {
+                shimmer.style.opacity = '0'; setTimeout(() => shimmer.style.display = 'none', 400);
+                document.getElementById('fab-contact-btn').style.display = 'none'; document.getElementById('uid-verification-section').style.display = 'flex';
+                if(uidStat === 'pending') { document.getElementById('uid-form-state').style.display = 'none'; document.getElementById('uid-pending-state').style.display = 'block'; document.getElementById('uid-submitted-val').innerText = currentUserDoc.gameUid || 'N/A'; } else { document.getElementById('uid-form-state').style.display = 'block'; document.getElementById('uid-pending-state').style.display = 'none'; if(uidStat === 'rejected') { document.getElementById('uid-reject-msg').style.display = 'block'; document.getElementById('uid-reject-msg').innerText = "Rejected: " + (currentUserDoc.uidRejectReason || "Invalid Details"); } }
+                return; 
+            }
+
+            await syncWinningsLeaderboardDaily(user.uid, currentUserDoc);
+            updateUIWithUserData();
+
+            if (shimmer.style.display !== 'none') {
+                setTimeout(() => {
+                    shimmer.style.opacity = '0'; 
+                    setTimeout(() => { 
+                        shimmer.style.display = 'none'; 
+                        showHomePanel(); 
+                        if(sessionStorage.getItem('triggerConfetti') === 'true') { setTimeout(() => { fireCanvasConfetti(); }, 400); sessionStorage.removeItem('triggerConfetti'); } 
+                    }, 300); 
+                }, 5200);
+            }
+
+        } else { signOut(auth); alert("Account data not found!"); }
+    });
+}
+
+onAuthStateChanged(auth, async (user) => {
+    if(isResettingPassword) return; 
+    if (user) {
+        loadUserData(user);
+        checkPendingDeposit();
+        initSwipeNavigation();
+    } else { 
+        hideAllSections(); document.getElementById('fab-contact-btn').style.display = 'none'; document.getElementById('auth-section').style.display = 'flex'; document.getElementById('shimmer-screen').style.display = 'none'; currentUserDoc = null; 
+    }
+});
+
+window.submitUidVerification = async function() {
+    const gid = document.getElementById('verify-game-id').value.trim(); const guid = document.getElementById('verify-game-uid').value.trim();
+    if(!gid || !guid) { alert("Please enter both In-Game Name and UID!"); return; }
+    showLoader(true);
+    try { await updateDoc(doc(db, "users", auth.currentUser.uid), { gameId: gid, gameUid: guid, uidStatus: 'pending', uidSubmittedAt: Date.now() }); document.getElementById('uid-form-state').style.display = 'none'; document.getElementById('uid-pending-state').style.display = 'block'; document.getElementById('uid-submitted-val').innerText = guid; if(currentUserDoc) currentUserDoc.uidStatus = 'pending'; showLoader(false); } catch(e) { showLoader(false); alert("Error: " + e.message); }
+}
+
+function updateNavActive(navId) { document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active')); if(navId) document.getElementById(navId).classList.add('active'); }
+function resetAppScroll() { document.querySelectorAll('.page-section').forEach(el => el.scrollTop = 0); document.getElementById('auth-section').scrollTop = 0; document.getElementById('bottom-nav').classList.remove('hide-nav'); }
+function hideAllSections() { document.querySelectorAll('.page-section').forEach(el => { el.style.display = 'none'; el.classList.remove('active-page'); }); document.getElementById('auth-section').style.display = 'none'; document.getElementById('bottom-nav').style.display = 'none'; document.getElementById('fab-contact-btn').style.display = 'none'; }
+function showNav() { document.getElementById('bottom-nav').style.display = 'flex'; }
+
+window.showHomePanel = function(isBack = false) { 
+    if(!isBack) pushHistoryState('home');
+    hideAllSections(); let hs = document.getElementById('home-section'); hs.style.display = 'block'; hs.offsetHeight; hs.classList.add('active-page'); showNav(); updateNavActive('nav-home'); resetAppScroll(); if(appProfileSettings.contact_link) document.getElementById('fab-contact-btn').style.display = 'flex';
+}
+window.showWallet = function(isBack = false) { 
+    if(!isBack) pushHistoryState('wallet');
+    hideAllSections(); document.getElementById('wallet-section').style.display = 'block'; showNav(); updateNavActive('nav-wal'); resetAppScroll(); 
+}
+window.showTopWinners = function(isBack = false) { 
+    if(!isBack) pushHistoryState('top');
+    hideAllSections(); document.getElementById('top-section').style.display = 'block'; showNav(); updateNavActive('nav-top'); resetAppScroll(); 
+}
+window.showReferral = function(isBack = false) { 
+    if(!isBack) pushHistoryState('refer');
+    hideAllSections(); document.getElementById('ref-section').style.display = 'block'; showNav(); updateNavActive('nav-ref'); resetAppScroll(); 
+}
+window.showProfile = function(isBack = false) { 
+    if(!isBack) pushHistoryState('profile');
+    hideAllSections(); document.getElementById('profile-section').style.display = 'block'; showNav(); updateNavActive('nav-pro'); resetAppScroll(); runCounters(); 
+}
+window.showUpdatesList = function(isBack = false) { 
+    if(!isBack) pushHistoryState('updates');
+    hideAllSections(); document.getElementById('updates-list-section').style.display = 'block'; resetAppScroll(); 
+}
+window.showNotifications = function(isBack = false) { 
+    if(!isBack) pushHistoryState('notifications');
+    document.getElementById('noti-badge-dot').style.display = 'none'; hideAllSections(); document.getElementById('notifications-section').style.display = 'block'; resetAppScroll(); 
+}
+window.showTransactionHistory = function(isBack = false) { 
+    if(!isBack) pushHistoryState('history');
+    hideAllSections(); document.getElementById('trx-history-section').style.display = 'block'; resetAppScroll(); 
+}
+
+window.openPolicyViewer = function(policyKey, policyTitle) {
+    document.getElementById('policy-title').innerText = policyTitle;
+    let htmlData = appProfileSettings[policyKey] || `<h2>${policyTitle}</h2><p>Not updated by admin yet.</p>`;
+    document.getElementById('policy-content').innerHTML = htmlData;
+    pushHistoryState('policy');
+    hideAllSections(); document.getElementById('policy-viewer-section').style.display = 'block'; resetAppScroll();
+}
+
+window.openGameUidModal = function() { document.getElementById('prof-game-id').value = currentUserDoc.gameId || ''; document.getElementById('prof-game-uid').value = currentUserDoc.gameUid || ''; document.getElementById('uid-modal').style.display = 'flex'; }
+window.openPasswordModal = function() { document.getElementById('old-sec-pass').value = ''; document.getElementById('new-sec-pass').value = ''; document.getElementById('conf-sec-pass').value = ''; document.getElementById('password-modal').style.display = 'flex'; }
+window.closeGlassModal = function(id) { document.getElementById(id).style.display = 'none'; }
+
+window.submitChangeUid = async function() {
+    const gid = document.getElementById('prof-game-id').value.trim(); const guid = document.getElementById('prof-game-uid').value.trim();
+    if(!gid || !guid) { alert("Enter valid ID and UID"); return; }
+    try { 
+        showLoader(true); await updateDoc(doc(db, "users", auth.currentUser.uid), { gameId: gid, gameUid: guid, uidStatus: 'pending', uidSubmittedAt: Date.now() }); 
+        currentUserDoc.gameId = gid; currentUserDoc.gameUid = guid; currentUserDoc.uidStatus = 'pending';
+        closeGlassModal('uid-modal'); alert("UID submitted for verification!"); showLoader(false); window.location.reload(); 
+    } catch(e) { alert("Error: " + e.message); showLoader(false); } 
+}
+
+window.submitChangePassword = async function() {
+    const oldPass = document.getElementById('old-sec-pass').value.trim(); const newPass = document.getElementById('new-sec-pass').value.trim(); const confPass = document.getElementById('conf-sec-pass').value.trim();
+    if(!oldPass) { alert("Please enter old password!"); return; } if(newPass.length < 6) { alert("New password must be at least 6 characters."); return; } if(newPass !== confPass) { alert("Passwords do not match!"); return; }
+    try { 
+        showLoader(true); const credential = EmailAuthProvider.credential(auth.currentUser.email, oldPass); await reauthenticateWithCredential(auth.currentUser, credential);
+        await updatePassword(auth.currentUser, newPass); await updateDoc(doc(db, "users", auth.currentUser.uid), { password: newPass }); currentUserDoc.password = newPass; 
+        closeGlassModal('password-modal'); alert("Password Updated Successfully!"); showLoader(false);
+    } catch(e) { if(e.code === 'auth/wrong-password') { alert("Incorrect Old Password!"); } else { alert("Error: " + e.message); } showLoader(false); } 
+}
+
+function hexToRgba(hex, opacity) { if(!hex) return ''; hex = hex.replace('#', ''); if(hex.length === 3) hex = hex.split('').map(char => char + char).join(''); const r = parseInt(hex.substring(0, 2), 16), g = parseInt(hex.substring(2, 4), 16), b = parseInt(hex.substring(4, 6), 16); return `rgba(${r}, ${g}, ${b}, ${opacity})`; }
+
+// ==========================================
+// REAL-TIME LEADERBOARD LOGIC
+// ==========================================
+async function fetchTopPlayers() {
+    try {
+        const topQuery = query(collection(db, "users"), orderBy("leaderboardWinnings", "desc"));
+        const snapshot = await getDocs(topQuery);
+        
+        let rank = 1;
+        let listHtml = '';
+        const coinImg = appProfileSettings.coin_image_url || "https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png";
+        let defaultAvatarUrl = "https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png";
+
+        const loadingText = document.getElementById('loading-text');
+        if(loadingText) loadingText.style.display = "none";
+        
+        snapshot.forEach(docSnap => {
+            const userData = docSnap.data();
+            const displayName = userData.gameId || userData.username || "UNKNOWN";
+            const scoreVal = parseFloat(userData.leaderboardWinnings || 0).toFixed(0);
+            const userAvatar = userData.avatar_url || defaultAvatarUrl;
+
+            if(rank === 1) {
+                let nameEl = document.getElementById('p-name-1'); if(nameEl) nameEl.innerText = displayName;
+                let imgEl = document.getElementById('p-img-1'); if(imgEl) imgEl.src = userAvatar;
+                let scoreEl = document.getElementById('p-score-1'); if(scoreEl) scoreEl.innerHTML = `<img src="${coinImg}" class="coin-icon" style="width:18px; height:18px;"> ${scoreVal}`;
+            } 
+            else if(rank === 2) {
+                let nameEl = document.getElementById('p-name-2'); if(nameEl) nameEl.innerText = displayName;
+                let imgEl = document.getElementById('p-img-2'); if(imgEl) imgEl.src = userAvatar;
+                let scoreEl = document.getElementById('p-score-2'); if(scoreEl) scoreEl.innerHTML = `<img src="${coinImg}" class="coin-icon" style="width:18px; height:18px;"> ${scoreVal}`;
+            } 
+            else if(rank === 3) {
+                let nameEl = document.getElementById('p-name-3'); if(nameEl) nameEl.innerText = displayName;
+                let imgEl = document.getElementById('p-img-3'); if(imgEl) imgEl.src = userAvatar;
+                let scoreEl = document.getElementById('p-score-3'); if(scoreEl) scoreEl.innerHTML = `<img src="${coinImg}" class="coin-icon" style="width:18px; height:18px;"> ${scoreVal}`;
+            } 
+            else {
+                listHtml += `
+                <div class="lb-item">
+                    <div class="lb-rank">#${rank}</div>
+                    <div class="lb-user-info">
+                        <div class="lb-user-frame-container">
+                            <div class="lb-user-frame" style="background-image: url('https://i.ibb.co/VcLyChwG/detailed-watercolor-circle-frame-863013-93268.png')"></div>
+                            <img class="lb-user-avatar" src="${userAvatar}" alt="player">
+                        </div>
+                        <div class="lb-user-name">${displayName}</div>
+                    </div>
+                    <div class="lb-user-score game-font flex-amt">
+                        <img src="${coinImg}" class="coin-icon" style="width:16px; height:16px;"> ${scoreVal}
+                    </div>
+                </div>`;
+            }
+            rank++;
+        });
+
+        const listContainer = document.getElementById('leaderboard-list-items');
+        if(listContainer) {
+            listContainer.innerHTML = listHtml || '<div style="text-align:center; padding:15px; color:#888;">No players ranked yet</div>';
+        }
+
+    } catch(e) {
+        console.log("Error loading top players: ", e);
+    }
+}
+
+// ==========================================
+// CORE FIREBASE UI & CONFIGURATION FETCH
+// ==========================================
+async function fetchUIControls() {
+    try {
+        if(!navigator.onLine) { document.getElementById('app-container').style.opacity = '1'; uiFetched = true; return; }
+        
+        const appSetDoc = await getDoc(doc(db, "admin_settings", "app_display"));
+        if(appSetDoc.exists() && appSetDoc.data().app_welcome_name) {
+            document.getElementById('ui-txt-appname').innerText = appSetDoc.data().app_welcome_name;
+        } else {
+            document.getElementById('ui-txt-appname').innerText = "Squad Fire";
+        }
+
+        const authDoc = await getDoc(doc(db, "ui_controls", "user_panel"));
+        if(authDoc.exists()) {
+            const data = authDoc.data();
+            root.style.setProperty('--bg-top', data.background.top); root.style.setProperty('--bg-bottom', data.background.bottom);
+            root.style.setProperty('--popup-left', data.popup.left); root.style.setProperty('--popup-right', data.popup.right);
+            root.style.setProperty('--title-g1', data.header.color1); root.style.setProperty('--title-g2', data.header.color2);
+            root.style.setProperty('--input-bg', data.input.bg); const rgbaVal = hexToRgba(data.input.textColor, data.input.opacity); root.style.setProperty('--input-text', rgbaVal); root.style.setProperty('--input-icon-placeholder', rgbaVal);
+            root.style.setProperty('--input-focus', data.input.focusColor); root.style.setProperty('--apply-bg', data.applyBtn.bg); root.style.setProperty('--apply-text', data.applyBtn.text); root.style.setProperty('--link-color', data.bottomLink);
+            if(data.animations) { root.style.setProperty('--title-anim', data.animations.title || 'none'); root.style.setProperty('--submit-anim', data.animations.submit || 'none'); }
+            if(data.submitBtn.type === "solid") { root.style.setProperty('--submit-bg', data.submitBtn.color1); } else { root.style.setProperty('--submit-bg', `linear-gradient(90deg, ${data.submitBtn.color1}, ${data.submitBtn.color2})`); }
+        }
+
+        if(!auth.currentUser) { setTimeout(() => { document.getElementById('app-container').style.opacity = '1'; }, 100); }
+
+        const homeDoc = await getDoc(doc(db, "ui_controls", "home_layout"));
+        if(homeDoc.exists()) { 
+            const data = homeDoc.data(); 
+            for (const [key, value] of Object.entries(data)) { 
+                if(key !== 'accIconMode' && key !== '--h-bal-bg') root.style.setProperty(key, value); 
+            } 
+            if(data['--h-bal-bg1']) root.style.setProperty('--h-bal-bg', data['--h-bal-bg1']); 
+            const iconMode = data.accIconMode || 'custom';
+            document.querySelectorAll('.h-acc-item').forEach(el => { el.setAttribute('data-mode', iconMode); });
+
+            if(data['--h-lbl-font-size']) root.style.setProperty('--h-lbl-font-size', data['--h-lbl-font-size']);
+            if(data['--h-lbl-font-weight']) root.style.setProperty('--h-lbl-font-weight', data['--h-lbl-font-weight']);
+            if(data['--h-lbl-text-color']) root.style.setProperty('--h-lbl-text-color', data['--h-lbl-text-color']);
+        }
+        
+        const walDoc = await getDoc(doc(db, "ui_controls", "wallet_layout"));
+        if(walDoc.exists()) { const data = walDoc.data(); for (const [key, value] of Object.entries(data)) { root.style.setProperty(key, value); } }
+        
+        const amDoc = await getDoc(doc(db, "ui_controls", "addmoney_layout"));
+        if(amDoc.exists()) { const data = amDoc.data(); for (const [key, value] of Object.entries(data)) { root.style.setProperty(key, value); } }
+        
+        const textDoc = await getDoc(doc(db, "ui_controls", "home_texts"));
+        if(textDoc.exists()) { 
+            const t = textDoc.data(); 
+            if(t.welcomeName) document.getElementById('ui-txt-wel').innerText = t.welcomeName; 
+            if(t.announceText) {
+                let cleanText = t.announceText.replace(' <span class="fire-emoji">🔥</span>', '');
+                document.getElementById('ui-txt-ann').innerHTML = cleanText + ' <span class="fire-emoji">🔥</span>'; 
+            }
+            if(t.accTitle) document.getElementById('ui-txt-acc').innerText = t.accTitle; 
+            if(t.conTitle) document.getElementById('ui-txt-con').innerText = t.conTitle; 
+            if(t.gameTitle) document.getElementById('ui-txt-game').innerText = t.gameTitle; 
+        }
+
+        const logoDoc = await getDoc(doc(db, "ui_controls", "top_logo"));
+        if(logoDoc.exists()) { 
+            const l = logoDoc.data(); 
+            const logoEl = document.getElementById('ui-logo'); 
+            const linkEl = document.getElementById('ui-top-logo-link'); 
+            if(l.imgUrl) { 
+                logoEl.style.backgroundImage = `url('${l.imgUrl}')`; 
+                logoEl.style.backgroundColor = 'transparent'; 
+                logoEl.style.border = 'none';
+            } 
+            if(l.targetUrl) { linkEl.href = l.targetUrl; } else { linkEl.removeAttribute("href"); } 
+        }
+
+        const profileDoc = await getDoc(doc(db, "ui_controls", "profile_settings"));
+        if(profileDoc.exists()) {
+            appProfileSettings = profileDoc.data();
+            
+            if(appProfileSettings.coin_image_url) {
+                document.querySelectorAll('.coin-icon').forEach(img => {
+                    img.src = appProfileSettings.coin_image_url;
+                });
+            }
+            
+            if(appProfileSettings.avatar_url) document.getElementById('pro-avatar-img').src = appProfileSettings.avatar_url;
+            if(appProfileSettings.profile_cover) document.getElementById('pro-cover-img').style.backgroundImage = `url('${appProfileSettings.profile_cover}')`;
+            
+            const iInsta = document.getElementById('social-insta'); if(appProfileSettings.social_insta) { iInsta.style.display = 'inline-block'; iInsta.onclick = () => window.open(appProfileSettings.social_insta, '_blank'); }
+            const iYt = document.getElementById('social-yt'); if(appProfileSettings.social_yt) { iYt.style.display = 'inline-block'; iYt.onclick = () => window.open(appProfileSettings.social_yt, '_blank'); }
+            const iTg = document.getElementById('social-tg'); if(appProfileSettings.social_tg) { iTg.style.display = 'inline-block'; iTg.onclick = () => window.open(appProfileSettings.social_tg, '_blank'); }
+            const fBtn = document.getElementById('fab-contact-btn'); if(appProfileSettings.contact_link) { fBtn.onclick = () => window.open(appProfileSettings.contact_link, '_blank'); }
+
+            if(appProfileSettings.uid_inst_text) document.getElementById('uid-inst-show').innerText = appProfileSettings.uid_inst_text;
+            if(appProfileSettings.uid_step_img) { document.getElementById('uid-step-img-show').src = appProfileSettings.uid_step_img; document.getElementById('uid-step-img-show').style.display = 'block'; }
+        }
+
+        const updQuery = query(collection(db, "important_updates"), orderBy("timestamp", "desc")); const updSnap = await getDocs(updQuery);
+        const listContainer = document.getElementById('ui-updates-list-container'); listContainer.innerHTML = ''; globalUpdatesData = []; 
+        if(!updSnap.empty) { let index = 0; updSnap.forEach(doc => { let d = doc.data(); globalUpdatesData.push(d); listContainer.innerHTML += `<div class="u-box tactile-3d" onclick="openFullPost(${index})"><i class="fa-solid fa-bullhorn"></i><div><h4>${d.title}</h4><p>${d.time}</p></div><i class="fa-solid fa-angle-right" style="margin-left:auto; font-size:16px;"></i></div>`; index++; }); } else { listContainer.innerHTML = '<p style="text-align:center; padding: 20px; color:#888; font-size:12px;">No updates found.</p>'; }
+
+        const gamesSnap = await getDocs(collection(db, "games_list")); const gameContainer = document.getElementById('ui-games-container'); 
+        let gamesHtml = '';
+        if(!gamesSnap.empty) { 
+            gamesSnap.forEach(g => { 
+                let gd = g.data(); 
+                gamesHtml += `<div class="h-game-card tactile-3d" onclick="openGameMatches('${gd.name}')"><div class="h-game-img" style="background-image:url('${gd.imgUrl}')"></div><div class="h-game-lbl">${gd.name}</div></div>`; 
+            }); 
+        } else { 
+            gamesHtml = '<p style="color:#888; text-align:center; font-size:11px; grid-column:1/-1;">No games available</p>'; 
+        }
+        gameContainer.innerHTML = gamesHtml;
+
+        const amSetDoc = await getDoc(doc(db, "admin_settings", "add_money"));
+        if(amSetDoc.exists()) {
+            const data = amSetDoc.data();
+            addMoneySettings.min = data.minAmount || 10; addMoneySettings.max = data.maxAmount || 10000; addMoneySettings.btnText = data.btnText || 'Proceed to Pay'; 
+        }
+        const appSetDoc2 = await getDoc(doc(db, "settings", "app"));
+        if(appSetDoc2.exists() && appSetDoc2.data().minWithdraw) { minWithdrawLimit = parseFloat(appSetDoc2.data().minWithdraw) || 50; }
+
+        document.getElementById('am-min-txt').innerText = `Min: ₹${addMoneySettings.min}`; document.getElementById('am-max-txt').innerText = `Max: ₹${addMoneySettings.max}`; document.getElementById('am-btn-text').innerText = addMoneySettings.btnText; document.getElementById('wm-amt').placeholder = `Amount (Min ₹${minWithdrawLimit})`;
+
+        const presetHtml = [20, 50, 100, 200, 500, 1000].map(amt => `<button class="amount-preset-btn tactile-3d" onclick="document.getElementById('am-amount').value=${amt};">₹${amt}</button>`).join('');
+        document.getElementById('am-presets').innerHTML = presetHtml;
+
+        const promoSnap = await getDocs(collection(db, "promo_banners")); 
+        const track = document.getElementById('ui-banner-track'); const dotsContainer = document.getElementById('ui-banner-dots'); 
+        track.innerHTML = ''; dotsContainer.innerHTML = ''; let slideCount = 0;
+        
+        if(!promoSnap.empty) { 
+            promoSnap.forEach(docSnap => { 
+                let p = docSnap.data(); 
+                track.innerHTML += `
+                    <div class="h-banner-box">
+                        <a href="${p.targetUrl || '#'}" target="${p.targetUrl ? '_blank' : '_self'}" class="h-banner-slide tactile-3d" style="background-image:url('${p.imgUrl}')"></a>
+                    </div>
+                `; 
+                dotsContainer.innerHTML += `<span class="dot ${slideCount === 0 ? 'active' : ''}"></span>`; slideCount++; 
+            }); 
+            if(slideCount > 1) { 
+                const dots = dotsContainer.querySelectorAll('.dot'); let isDragging = false; let startPos = 0, currentTranslate = 0, prevTranslate = 0; let currentIndex = 0; let autoSlideInt;
+                function snapSlide() { track.style.transition = 'transform 0.8s cubic-bezier(0.25, 1, 0.35, 1)'; prevTranslate = currentIndex * -100; track.style.transform = `translateX(${prevTranslate}%)`; dots.forEach(d => d.classList.remove('active')); if(dots[currentIndex]) dots[currentIndex].classList.add('active'); }
+                function startAutoSlide() { clearInterval(autoSlideInt); autoSlideInt = setInterval(() => { currentIndex = (currentIndex + 1) % slideCount; snapSlide(); }, 3500); }
+                track.addEventListener('touchstart', (e) => { isDragging = true; startPos = e.touches[0].clientX; track.style.transition = 'none'; clearInterval(autoSlideInt); }, {passive: true});
+                track.addEventListener('touchmove', (e) => { if (!isDragging) return; const currentPosition = e.touches[0].clientX; const diff = currentPosition - startPos; const diffPercent = (diff / track.offsetWidth) * 100; currentTranslate = prevTranslate + diffPercent; track.style.transform = `translateX(${currentTranslate}%)`; }, {passive: true});
+                track.addEventListener('touchend', () => { isDragging = false; const diff = currentTranslate - prevTranslate; if (diff < -15) { currentIndex = (currentIndex + 1) % slideCount; } else if (diff > 15) { currentIndex = (currentIndex - 1 + slideCount) % slideCount; } snapSlide(); startAutoSlide(); });
+                startAutoSlide();
+            } 
+        } else { document.getElementById('ui-banner-track').innerHTML = '<div class="h-banner-box tactile-3d" style="background:#444;display:flex;align-items:center;justify-content:center;color:#fff;">No Banner Found</div>'; }
+
+        fetchTopPlayers();
+
+        uiFetched = true;
+    } catch(e) { console.log("Firebase Load Error: ", e); document.getElementById('app-container').style.opacity = '1'; uiFetched = true;}
+}
+
+// ==========================================
+// REAL-TIME NOTIFICATIONS DISPATCH ENGINE
+// ==========================================
+async function fetchNotifications(uid) {
+    if (unsubscribeNotifications) {
+        unsubscribeNotifications();
+        unsubscribeNotifications = null;
+    }
+    const listCont = document.getElementById('ui-notifications-list');
+    const notiQuery = query(collection(db, "users", uid, "notifications"), orderBy("timestamp", "desc"));
+    
+    unsubscribeNotifications = onSnapshot(notiQuery, (snapshot) => {
+        listCont.innerHTML = '';
+        if(!snapshot.empty) { 
+            document.getElementById('noti-badge-dot').style.display = 'block'; 
+            snapshot.forEach(docSnap => { 
+                let d = docSnap.data(); 
+                let imgHtml = d.imageUrl ? `<div class="n-img-box" style="background-image:url('${d.imageUrl}'); display:block;"></div>` : ''; 
+                listCont.innerHTML += `
+                    <div class="u-box" style="flex-direction:column; align-items:flex-start; cursor:default;">
+                        <div style="display:flex; width:100%; justify-content:space-between; align-items:center; border-bottom:1px solid #444; padding-bottom:6px; margin-bottom:6px;">
+                            <h4 style="color:#00ffcc; font-size:14px; margin:0;"><i class="fa-solid fa-bell"></i> ${d.title}</h4>
+                            <span style="font-size:9px; color:#888;">${d.time || 'Just now'}</span>
+                        </div>
+                        ${imgHtml}
+                        <p style="font-size:11px; color:#fff; line-height:1.5; font-weight:normal;">${d.message}</p>
+                    </div>`; 
+            }); 
+        } else { 
+            document.getElementById('noti-badge-dot').style.display = 'none';
+            listCont.innerHTML = '<p style="text-align:center; padding: 20px; color:#888; font-size:12px;">No notifications yet.</p>'; 
+        } 
+    }, (error) => {
+        console.log("Error syncing notifications in real-time:", error);
+    });
+}
+
+window.openFullPost = function(index) { const data = globalUpdatesData[index]; if(!data) return; document.getElementById('ui-upd-img').style.backgroundImage = `url('${data.imgUrl || ""}')`; document.getElementById('ui-upd-title').innerText = data.title; document.getElementById('ui-upd-time').innerText = data.time; document.getElementById('ui-upd-desc').innerText = data.description; pushHistoryState('updates-post'); hideAllSections(); document.getElementById('updates-post-section').style.display = 'block'; resetAppScroll(); }
+
+window.copyText = function(id) { navigator.clipboard.writeText(document.getElementById(id).innerText).then(() => { alert("Copied: " + document.getElementById(id).innerText); }); }
+
+// ==========================================
+// ADD MONEY GATEWAY Flow
+// ==========================================
+window.startRechargeFlow = function(isBack = false) {
+    if(!isBack) { pushHistoryState('addmoney'); }
+    hideAllSections(); 
+    document.getElementById('addmoney-section').style.display = 'block'; 
+    resetAppScroll();
+    document.getElementById('am-amount').value = ''; 
+}
+
+window.initiateGatewayPayment = async function() {
+    const amtInput = document.getElementById('am-amount');
+    const amt = parseFloat(amtInput.value);
+    
+    if (isNaN(amt) || amt < addMoneySettings.min || amt > addMoneySettings.max) {
+        alert(`Please enter a deposit amount between ₹${addMoneySettings.min} and ₹${addMoneySettings.max}`);
+        return;
+    }
+    
+    if (!auth.currentUser || !currentUserDoc) {
+        alert("Session expired. Please login again to continue.");
+        return;
+    }
+
+    showLoader(true, "Opening UPI Gateway...");
+    try {
+        let cleanPhone = currentUserDoc.phone || '9999999999';
+        cleanPhone = cleanPhone.replace("+91", "").replace(/\s+/g, "").trim();
+
+        const response = await fetch("https://payment-gateway-1i9b.onrender.com/create-payment", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                amount: amt,
+                userId: auth.currentUser.uid,
+                userEmail: currentUserDoc.email,
+                userPhone: cleanPhone,
+                userName: `${currentUserDoc.firstName || 'User'} ${currentUserDoc.lastName || ''}`.trim()
+            })
+            
+        });
+
+        const resData = await response.json();
+        showLoader(false);
+
+        if (resData && resData.success && resData.payment_url) {
+            localStorage.setItem('pending_verification_order_id', resData.orderId);
+            window.location.href = resData.payment_url;
+        } else {
+            alert("Payment Request Rejected: " + (resData.message || "Unknown Provider Error"));
+        }
+    } catch (e) {
+        showLoader(false);
+        console.error("Payment initiation failure: ", e);
+        alert("Payment gateway is temporarily busy. Please try again.");
+    }
+}
+
+// ==========================================
+// AUTOMATIC ACTIVE PAYMENT VERIFICATION Sync
+// ==========================================
+async function checkPendingDeposit() {
+    const pendingOrderId = localStorage.getItem('pending_verification_order_id');
+    if (!pendingOrderId) return;
+
+    console.log("Checking status for Order:", pendingOrderId);
+    
+    try {
+        await fetch(`https://payment-gateway-1i9b.onrender.com/verify-payment/${pendingOrderId}`);
+    } catch (err) {
+        console.warn("Direct pull verification request sent, waiting background snapshot.");
+    }
+
+    const depositRef = doc(db, "deposits", pendingOrderId);
+    const unsubscribe = onSnapshot(depositRef, (snapshot) => {
+        if (snapshot.exists()) {
+            const data = snapshot.data();
+            if (data.status === 'approved') {
+                console.log("Realtime snapshot confirmed: Deposit Success.");
+                
+                const audioObj = document.getElementById('message-success-audio');
+                if(audioObj) {
+                    audioObj.play().catch(err => console.log("Audio playback deferred: ", err));
+                }
+
+                document.getElementById('success-msg').innerText = `Deposit of ₹${data.amount} credited successfully!`;
+                showSuccessPopup();
+                fireCanvasConfetti();
+                
+                localStorage.removeItem('pending_verification_order_id');
+                unsubscribe(); 
+            } else if (data.status === 'failed') {
+                console.log("Realtime snapshot confirmed: Deposit Failed.");
+                localStorage.removeItem('pending_verification_order_id');
+                unsubscribe();
+            }
+        }
+    });
+
+    setTimeout(() => {
+        unsubscribe();
+    }, 25000);
+}
+
+// ==========================================
+// SECURE WITHDRAWAL SYSTEM WITH IMMEDIATE DEDUCTION
+// ==========================================
+window.openWithdrawalSection = function(isBack = false) {
+    if(!isBack) { pushHistoryState('withdraw'); } 
+    document.getElementById('wm-amt').value = ''; 
+    document.getElementById('wm-upi').value = ''; 
+    document.getElementById('wm-error-msg').style.display = 'none';
+    hideAllSections(); 
+    document.getElementById('withdrawal-section').style.display = 'block'; 
+    resetAppScroll();
+}
+
+document.getElementById('wm-amt').addEventListener('input', function() {
+    const amt = parseFloat(this.value);
+    const errMsg = document.getElementById('wm-error-msg');
+    
+    if (isNaN(amt)) {
+        errMsg.style.display = 'none';
+        return;
+    }
+    if (amt < minWithdrawLimit) {
+        errMsg.innerText = `Minimum withdrawal amount allowed is ₹${minWithdrawLimit}`;
+        errMsg.style.display = 'block';
+    } else {
+        const availableWinnings = parseFloat(currentUserDoc ? currentUserDoc.winningCash : 0);
+        if (amt > availableWinnings) {
+            errMsg.innerText = `Insufficient Winning Balance (Available: ₹${availableWinnings.toFixed(0)})`;
+            errMsg.style.display = 'block';
+        } else {
+            errMsg.style.display = 'none';
+        }
+    }
+});
+
+window.submitWithdrawal = async function() {
+    const amt = parseFloat(document.getElementById('wm-amt').value); 
+    const upi = document.getElementById('wm-upi').value.trim(); 
+    const btn = document.getElementById('wm-submit-btn');
+    const errMsg = document.getElementById('wm-error-msg');
+    
+    if(isNaN(amt) || amt < minWithdrawLimit) { 
+        errMsg.innerText = `Minimum withdrawal is ₹${minWithdrawLimit}`; 
+        errMsg.style.display = 'block';
+        return; 
+    }
+    if(!upi) { 
+        alert("Enter UPI ID or Bank Details."); 
+        return; 
+    }
+    
+    let winBal = parseFloat(currentUserDoc.winningCash || 0); 
+    if(amt > winBal) { 
+        errMsg.innerText = "Insufficient Winning Balance."; 
+        errMsg.style.display = 'block';
+        return; 
+    }
+    
+    btn.innerHTML = "Processing..."; 
+    btn.disabled = true; 
+    showLoader(true);
+    
+    try {
+        const updatedWinningCash = winBal - amt;
+        const updatedTotalBalance = parseFloat(currentUserDoc.balance || 0) - amt;
+        
+        await updateDoc(doc(db, "users", auth.currentUser.uid), {
+            winningCash: updatedWinningCash,
+            balance: updatedTotalBalance
+        });
+
+        await addDoc(collection(db, "withdrawals"), { 
+            userId: auth.currentUser.uid, 
+            userEmail: currentUserDoc.email, 
+            gameId: currentUserDoc.gameId || currentUserDoc.username || 'UNKNOWN', 
+            gameUid: currentUserDoc.gameUid || 'N/A', 
+            amount: amt, 
+            upiId: upi, 
+            status: 'pending', 
+            timestamp: new Date().getTime() 
+        });
+        
+        try {
+            await window.triggerWithdraw(amt);
+        } catch(rtdbErr) {
+            console.log("RTDB Announcer trigger skipped: ", rtdbErr);
+        }
+
+        const audioObj = document.getElementById('message-success-audio');
+        if(audioObj) {
+            audioObj.play().catch(err => console.log("Audio playback deferred: ", err));
+        }
+
+        document.getElementById('success-msg').innerText = "Withdrawal request submitted successfully! Funds updated."; 
+        showSuccessPopup(); 
+        fireCanvasConfetti();
+        setTimeout(() => { showWallet(); }, 3000);
+    } catch(e) { 
+        alert("Error during withdrawal submission: " + e.message); 
+    } finally {
+        btn.innerHTML = "WITHDRAW"; 
+        btn.disabled = false; 
+        showLoader(false);
+    }
+}
+
+function showSuccessPopup() { const pop = document.getElementById('success-popup'); pop.style.display = 'block'; setTimeout(() => { pop.classList.add('show'); }, 10); setTimeout(() => { pop.classList.remove('show'); setTimeout(() => { pop.style.display = 'none'; }, 300); }, 3000); }
+
+// ==========================================
+// PREMIUM PROFILE EDIT COMPONENT HANDLERS
+// ==========================================
+window.openEditProfile = function(isBack = false) {
+    if (!isBack) pushHistoryState('edit-profile');
+    hideAllSections();
+    document.getElementById('edit-profile-section').style.display = 'block';
+    resetAppScroll();
+
+    if (!currentUserDoc) return;
+
+    // Prefill form values securely
+    document.getElementById('edit-first').value = currentUserDoc.firstName || '';
+    document.getElementById('edit-last').value = currentUserDoc.lastName || '';
+    document.getElementById('edit-game-id').value = currentUserDoc.gameId || '';
+    document.getElementById('edit-game-uid').value = currentUserDoc.gameUid || '';
+    
+    // Set active static ring avatar display
+    const editAvatarImg = document.getElementById('edit-avatar-img');
+    if (editAvatarImg) {
+        editAvatarImg.src = currentUserDoc.avatar_url || appProfileSettings.avatar_url || "https://i.pinimg.com/originals/ce/a0/0b/cea00b52203ba302ba2ce6337cb101ca.jpg";
+    }
+
+    // Reset old/new inputs to blank for re-authentication
+    const ids = [
+        'edit-old-phone', 'edit-new-phone',
+        'edit-old-email', 'edit-new-email',
+        'edit-old-pwd', 'edit-new-pwd'
+    ];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.value = '';
+    });
+}
+
+window.triggerAvatarUpload = function() {
+    const inputEl = document.getElementById('edit-avatar-input');
+    if (inputEl) inputEl.click();
+}
+
+window.handleAvatarSelection = function(input) {
+    if (!input.files || !input.files[0]) return;
+    
+    selectedImageFile = input.files[0];
+
+    // Read selected file locally to show adjustment preview
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        // Reset scale and offsets
+        zoomScale = 1;
+        transX = 0;
+        transY = 0;
+        
+        const cropImg = document.getElementById('image-to-crop');
+        cropImg.src = e.target.result;
+        cropImg.style.transform = `translate(0px, 0px) scale(1)`;
+
+        document.getElementById('image-management-overlay').style.display = 'flex';
+        
+        // Initialize multi-touch listeners for pinch-zoom and drag
+        initCropTouchControls();
+    };
+    reader.readAsDataURL(selectedImageFile);
+}
+
+// ==========================================
+// PINCH-ZOOM AND FINGER-DRAG CROP ENGINE
+// ==========================================
+function initCropTouchControls() {
+    const touchZone = document.getElementById('crop-circle-touch-zone');
+    const targetImg = document.getElementById('image-to-crop');
+    if (!touchZone || !targetImg) return;
+
+    touchZone.addEventListener('touchstart', (e) => {
+        if (e.touches.length === 1) {
+            isDraggingImg = true;
+            startTouchX = e.touches[0].clientX - transX;
+            startTouchY = e.touches[0].clientY - transY;
+        } else if (e.touches.length === 2) {
+            isDraggingImg = false;
+            initialDistance = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+        }
+    }, { passive: true });
+
+    touchZone.addEventListener('touchmove', (e) => {
+        if (isDraggingImg && e.touches.length === 1) {
+            transX = e.touches[0].clientX - startTouchX;
+            transY = e.touches[0].clientY - startTouchY;
+            updateCropImgTransform();
+        } else if (e.touches.length === 2) {
+            const currentDist = Math.hypot(
+                e.touches[0].clientX - e.touches[1].clientX,
+                e.touches[0].clientY - e.touches[1].clientY
+            );
+            if (initialDistance > 0) {
+                const factor = currentDist / initialDistance;
+                zoomScale = Math.min(Math.max(zoomScale * factor, 0.5), 4);
+                initialDistance = currentDist;
+                updateCropImgTransform();
+            }
+        }
+    }, { passive: true });
+
+    touchZone.addEventListener('touchend', () => {
+        isDraggingImg = false;
+        initialDistance = 0;
+    });
+}
+
+function updateCropImgTransform() {
+    const targetImg = document.getElementById('image-to-crop');
+    if (targetImg) {
+        targetImg.style.transform = `translate(${transX}px, ${transY}px) scale(${zoomScale})`;
+    }
+}
+
+window.cancelImageManagement = function() {
+    document.getElementById('image-management-overlay').style.display = 'none';
+    selectedImageFile = null;
+    document.getElementById('edit-avatar-input').value = '';
+}
+
+window.confirmImageManagement = async function() {
+    if (!selectedImageFile) return;
+
+    document.getElementById('image-management-overlay').style.display = 'none';
+    showLoader(true, "Uploading profile logo...");
+
+    try {
+        let uploadKey = "6f534efcd16f2f889e93f83abd71ac0a"; 
+        
+        const keysSnap = await getDoc(doc(db, "admin_settings", "api_keys"));
+        if (keysSnap.exists()) {
+            if (keysSnap.data().imgbb_logo) {
+                uploadKey = keysSnap.data().imgbb_logo.trim();
+            } else if (keysSnap.data().imgbb) {
+                uploadKey = keysSnap.data().imgbb.trim();
+            }
+        }
+
+        const formData = new FormData();
+        formData.append('image', selectedImageFile);
+
+        const response = await fetch(`https://api.imgbb.com/1/upload?key=${uploadKey}`, {
+            method: 'POST',
+            body: formData
+        });
+
+        const resData = await response.json();
+        showLoader(false);
+
+        if (resData && resData.success && resData.data.url) {
+            const uploadedUrl = resData.data.url;
+
+            await updateDoc(doc(db, "users", auth.currentUser.uid), {
+                avatar_url: uploadedUrl
+            });
+
+            currentUserDoc.avatar_url = uploadedUrl;
+            
+            document.getElementById('edit-avatar-img').src = uploadedUrl;
+            document.getElementById('pro-avatar-img').src = uploadedUrl;
+
+            alert("Logo adjusted and saved successfully!");
+        } else {
+            alert("Upload rejected by cloud server. Verify API Key.");
+        }
+    } catch(e) {
+        showLoader(false);
+        console.error("ImgBB upload error:", e);
+        alert("Failed uploading image. Check network state.");
+    } finally {
+        selectedImageFile = null;
+        document.getElementById('edit-avatar-input').value = '';
+    }
+}
+
+window.saveUserProfileData = async function(btn) {
+    const originalText = btn.innerText;
+    
+    const fn = document.getElementById('edit-first').value.trim();
+    const ln = document.getElementById('edit-last').value.trim();
+    const gameId = document.getElementById('edit-game-id').value.trim();
+    const gameUid = document.getElementById('edit-game-uid').value.trim();
+
+    const oldPhone = document.getElementById('edit-old-phone').value.trim();
+    const newPhone = document.getElementById('edit-new-phone').value.trim();
+
+    const oldEmail = document.getElementById('edit-old-email').value.trim();
+    const newEmail = document.getElementById('edit-new-email').value.trim();
+
+    const oldPwd = document.getElementById('edit-old-pwd').value.trim();
+    const newPwd = document.getElementById('edit-new-pwd').value.trim();
+
+    if (!fn || !ln || !gameId || !gameUid) {
+        alert("Basic Details (Name, Game ID, UID) are required!");
+        return;
+    }
+
+    btn.innerText = "Processing...";
+    btn.disabled = true;
+    showLoader(true, "Updating Profile...");
+
+    try {
+        const updatePayload = {
+            firstName: fn,
+            lastName: ln,
+            gameId: gameId,
+            gameUid: gameUid
+        };
+
+        if (newPhone) {
+            if (!oldPhone) {
+                throw new Error("Enter your Current Phone Number to change it.");
+            }
+            
+            const normalizedOld = "+91" + oldPhone;
+            if (normalizedOld !== currentUserDoc.phone) {
+                throw new Error("Current Phone Number is incorrect!");
+            }
+            if (!/^\d{10}$/.test(newPhone)) {
+                throw new Error("New Phone Number must be exactly 10 digits!");
+            }
+
+            const formattedNewPhone = "+91" + newPhone;
+            
+            const phoneQuery = query(collection(db, "users"), where("phone", "==", formattedNewPhone));
+            const phoneSnap = await getDocs(phoneQuery);
+            if (!phoneSnap.empty) {
+                throw new Error("This New Phone Number is already in use!");
+            }
+
+            updatePayload.phone = formattedNewPhone;
+        }
+
+        if (newEmail) {
+            if (!oldEmail) {
+                throw new Error("Enter your Current Email Address to change it.");
+            }
+            if (oldEmail.toLowerCase() !== currentUserDoc.email.toLowerCase()) {
+                throw new Error("Current Email Address is incorrect!");
+            }
+            
+            const emailPattern = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+            if (!emailPattern.test(newEmail)) {
+                throw new Error("New Email format is invalid!");
+            }
+
+            const emailQuery = query(collection(db, "users"), where("email", "==", newEmail.toLowerCase()));
+            const emailSnap = await getDocs(emailQuery);
+            if (!emailSnap.empty) {
+                throw new Error("This New Email Address is already registered!");
+            }
+
+            if (!oldPwd) {
+                throw new Error("Provide your current Password to safely execute email migration.");
+            }
+            const credential = EmailAuthProvider.credential(auth.currentUser.email, oldPwd);
+            await reauthenticateWithCredential(auth.currentUser, credential);
+            await updateEmail(auth.currentUser, newEmail.toLowerCase());
+
+            updatePayload.email = newEmail.toLowerCase();
+        }
+
+        if (newPwd) {
+            if (!oldPwd) {
+                throw new Error("Enter your Current Password to change it.");
+            }
+            if (oldPwd !== currentUserDoc.password) {
+                throw new Error("Current Password is incorrect!");
+            }
+            if (newPwd.length < 6) {
+                throw new Error("New Password must be at least 6 characters.");
+            }
+
+            const credential = EmailAuthProvider.credential(auth.currentUser.email, oldPwd);
+            await reauthenticateWithCredential(auth.currentUser, credential);
+            await updatePassword(auth.currentUser, newPwd);
+
+            updatePayload.password = newPwd;
+        }
+
+        await updateDoc(doc(db, "users", auth.currentUser.uid), updatePayload);
+
+        showLoader(false);
+        
+        const audioObj = document.getElementById('message-success-audio');
+        if(audioObj) {
+            audioObj.play().catch(err => console.log("Audio deferred: ", err));
+        }
+
+        document.getElementById('success-msg').innerText = "Profile settings written and updated successfully!";
+        showSuccessPopup();
+        fireCanvasConfetti();
+
+        setTimeout(() => {
+            showProfile();
+        }, 3000);
+
+    } catch (e) {
+        showLoader(false);
+        alert(e.message || "Error occurred during profile sync.");
+    } finally {
+        btn.innerText = originalText;
+        btn.disabled = false;
+    }
+}
