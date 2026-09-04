@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" id="viewport-meta" content="width=423, user-scalable=no, viewport-fit=cover">
+    <title>Live Stream Arena - Battle Arena</title>
+
+    <!-- Google Fonts & FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; -webkit-tap-highlight-color: transparent; outline: none; }
+        html, body { width: 100%; height: 100vh; height: 100dvh; overflow: hidden; background-color: #04060d; color: #ffffff; display: flex; justify-content: center; align-items: center; }
+        
+        #app-container {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 10%, rgba(255, 51, 102, 0.1) 0%, #080b18 60%, #04050d 100%);
+            position: relative;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-shadow: 0 0 50px rgba(0,0,0,0.95);
+        }
+        ::-webkit-scrollbar { display: none; }
+        .game-font { font-family: 'Rajdhani', sans-serif; font-weight: 800; letter-spacing: 0.5px; }
+
+        /* === 3D ROLLING VS LOADER SCREEN === */
+        #full-loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(4, 6, 15, 0.85); backdrop-filter: blur(12px);
+            z-index: 99999; display: flex; justify-content: center; align-items: center;
+            flex-direction: column; color: #ff3366; font-weight: 800; font-family: 'Rajdhani', sans-serif;
+            font-size: 16px; letter-spacing: 1px;
+        }
+        .loader-scene { width: 120px; height: 120px; perspective: 1000px; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-bottom: 20px; }
+        .coin-3d { width: 95px; height: 95px; position: relative; transform-style: preserve-3d; animation: rollCoin 2.2s linear infinite; }
+        @keyframes rollCoin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+        .coin-layer {
+            position: absolute; width: 100%; height: 100%; border-radius: 50%;
+            border: 3px solid #ff3366; background: linear-gradient(135deg, #3d0c24, #12030a);
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.6), inset 0 0 20px rgba(0, 0, 0, 0.8);
+            display: flex; justify-content: center; align-items: center;
+        }
+        .coin-layer::after {
+            content: 'VS'; font-family: 'Rajdhani', sans-serif; font-size: 40px; font-weight: 900; font-style: italic;
+            color: #facc15; text-shadow: 0 0 10px rgba(250, 204, 21, 0.8), 2px 2px 0px #ff3366; letter-spacing: 1px;
+        }
+        .front { transform: translateZ(8px); }
+        .back { transform: translateZ(-8px) rotateY(180deg); }
+        .mid-1 { transform: translateZ(4px); background: #ff3366; border: none; box-shadow: none; }
+        .mid-1::after { content: none; }
+        .mid-2 { transform: translateZ(0px); background: #ff3366; border: none; box-shadow: none; }
+        .mid-2::after { content: none; }
+        .mid-3 { transform: translateZ(-4px); background: #ff3366; border: none; box-shadow: none; }
+        .mid-3::after { content: none; }
+        .loader-shadow { margin-top: 15px; width: 85px; height: 6px; background: rgba(255, 51, 102, 0.5); border-radius: 50%; filter: blur(6px); animation: shadowPulse 2.2s linear infinite; }
+        @keyframes shadowPulse { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(0.4); opacity: 0.1; } }
+
+        /* === LIVE HEADER === */
+        .live-topbar {
+            position: sticky; top: 0; left: 0; width: 100%; height: 65px;
+            background: linear-gradient(180deg, #150a1a 0%, rgba(13, 8, 20, 0.95) 100%);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px; border-bottom: 1px solid rgba(255, 51, 102, 0.3);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8); z-index: 100; backdrop-filter: blur(10px);
+        }
+        .live-top-btn {
+            width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255, 51, 102, 0.3); color: #fff; display: flex;
+            justify-content: center; align-items: center; font-size: 16px; cursor: pointer;
+        }
+        .live-indicator-badge {
+            background: rgba(255, 51, 102, 0.15); border: 1px solid #ff3366; color: #ff3366;
+            font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 20px;
+            display: flex; align-items: center; gap: 6px; letter-spacing: 1px;
+            box-shadow: 0 0 12px rgba(255, 51, 102, 0.4);
+        }
+        .pulsar-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3366; animation: livePulse 1.2s infinite; }
+        @keyframes livePulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255, 51, 102, 0.7); } 70% { transform: scale(1.3); box-shadow: 0 0 0 8px rgba(255, 51, 102, 0); } 100% { transform: scale(1); } }
+
+        /* === 1VS1 BATTLEGROUND ARENA === */
+        .live-vs-stage {
+            width: 100%; background: linear-gradient(180deg, #180d22 0%, #090a18 100%);
+            border-bottom: 2px solid rgba(255, 51, 102, 0.3); padding: 25px 15px 20px;
+            display: flex; align-items: center; justify-content: space-around;
+            position: relative; overflow: hidden;
+        }
+        .vs-team { display: flex; flex-direction: column; align-items: center; width: 38%; z-index: 2; }
+        .vs-avatar-wrapper {
+            position: relative; width: 80px; height: 80px; display: flex; justify-content: center; align-items: center;
+        }
+        .vs-water-ring {
+            position: absolute; inset: -12%;
+            background-image: url('https://i.ibb.co/VcLyChwG/detailed-watercolor-circle-frame-863013-93268.png');
+            background-size: contain; background-repeat: no-repeat; background-position: center;
+            z-index: 3; filter: drop-shadow(0 0 8px rgba(0, 229, 255, 0.6)); pointer-events: none;
+        }
+        .vs-avatar {
+            width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
+            border: 2px solid #00e5ff; background: #0c0f24; z-index: 2;
+        }
+        .vs-player-name {
+            margin-top: 8px; font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 800;
+            color: #ffffff; text-transform: uppercase; letter-spacing: 0.5px; text-align: center;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%;
+        }
+
+        .vs-mid-hub { display: flex; flex-direction: column; align-items: center; z-index: 2; }
+        .vs-big-txt {
+            font-family: 'Rajdhani', sans-serif; font-size: 38px; font-weight: 900; font-style: italic;
+            color: #facc15; text-shadow: 0 0 15px rgba(250, 204, 21, 0.8), 2px 2px 0px #ff3366;
+            letter-spacing: 2px;
+        }
+
+        /* === STREAM CONTAINER === */
+        .content-scroll { padding: 18px 15px calc(95px + env(safe-area-inset-bottom)); }
+
+        .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
+        .meta-cell {
+            background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 51, 102, 0.2);
+            border-radius: 8px; padding: 8px 4px; text-align: center;
+        }
+        .meta-lbl { font-size: 9px; color: #8a96a3; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+        .meta-val { font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 800; color: #ff3366; text-transform: uppercase; }
+
+        .stream-theater {
+            width: 100%; height: 210px; background: #000; border-radius: 14px; overflow: hidden;
+            border: 1px solid rgba(0, 229, 255, 0.3); margin-bottom: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            position: relative; display: flex; justify-content: center; align-items: center;
+        }
+        .stream-theater iframe { width: 100%; height: 100%; border: none; }
+        .stream-placeholder-box { display: flex; flex-direction: column; align-items: center; gap: 10px; color: #cbd5e1; }
+        .stream-placeholder-box i { font-size: 48px; color: #ff3366; filter: drop-shadow(0 0 15px rgba(255, 51, 102, 0.8)); }
+
+        /* TABS */
+        .tab-nav { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 10px; }
+        .tab-btn {
+            flex: 1; padding: 10px 0; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px; color: #8a96a3; font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 800;
+            text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border-color: #ef4444;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+        }
+
+        .tab-pane { display: none; animation: tabFade 0.3s ease-out; }
+        .tab-pane.active { display: block; }
+        @keyframes tabFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        .cyber-box {
+            background: linear-gradient(145deg, rgba(20, 26, 54, 0.5) 0%, rgba(9, 12, 28, 0.8) 100%);
+            border: 1px solid rgba(255, 51, 102, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 15px;
+        }
+        .cyber-box h4 { font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 800; color: #ff3366; text-transform: uppercase; margin-bottom: 8px; }
+        .cyber-box p { font-size: 12px; line-height: 1.6; color: #cbd5e1; }
+
+        /* FIXED ACTION BAR */
+        .bottom-dock {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: calc(75px + env(safe-area-inset-bottom));
+            background: linear-gradient(180deg, rgba(14, 18, 38, 0.95), #060814);
+            border-top: 1px solid rgba(255, 51, 102, 0.3); display: flex; align-items: center;
+            padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); gap: 12px; z-index: 100;
+            backdrop-filter: blur(15px); box-shadow: 0 -10px 30px rgba(0,0,0,0.9);
+        }
+        .btn-stream-action {
+            flex: 1; height: 50px; background: linear-gradient(90deg, #ff3366 0%, #dc2626 100%);
+            border: none; border-radius: 12px; color: #fff; font-family: 'Rajdhani', sans-serif;
+            font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+            box-shadow: 0 0 25px rgba(255, 51, 102, 0.6); transition: all 0.2s;
+        }
+        .btn-stream-action:active { transform: scale(0.97); }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Rolling VS Loader -->
+    <div id="full-loader">
+        <div class="loader-scene">
+            <div class="coin-3d">
+                <div class="coin-layer front"></div>
+                <div class="coin-layer mid-1"></div>
+                <div class="coin-layer mid-2"></div>
+                <div class="coin-layer mid-3"></div>
+                <div class="coin-layer back"></div>
+            </div>
+            <div class="loader-shadow"></div>
+        </div>
+        <span>CONNECTING TO STREAM...</span>
+    </div>
+
+    <div id="app-container">
+        
+        <!-- Header -->
+        <header class="live-topbar">
+            <div class="live-top-btn" onclick="goBackToApp()"><i class="fa-solid fa-arrow-left"></i></div>
+            <div class="header-title" id="page-title">LIVE TOURNAMENT</div>
+            <div class="live-indicator-badge">
+                <div class="pulsar-dot"></div>
+                LIVE
+            </div>
+        </header>
+
+        <!-- 1vs1 Stage -->
+        <div class="live-vs-stage">
+            <div class="vs-team">
+                <div class="vs-avatar-wrapper">
+                    <div class="vs-water-ring"></div>
+                    <img id="p1-img" src="https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png" class="vs-avatar">
+                </div>
+                <div class="vs-player-name" id="p1-name">TEAM ALPHA</div>
+            </div>
+
+            <div class="vs-mid-hub">
+                <div class="vs-big-txt">VS</div>
+            </div>
+
+            <div class="vs-team">
+                <div class="vs-avatar-wrapper">
+                    <div class="vs-water-ring"></div>
+                    <img id="p2-img" src="https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png" class="vs-avatar">
+                </div>
+                <div class="vs-player-name" id="p2-name">TEAM OMEGA</div>
+            </div>
+        </div>
+
+        <!-- Main Body -->
+        <main class="content-scroll">
+            <div class="meta-grid">
+                <div class="meta-cell"><div class="meta-lbl">STATUS</div><div class="meta-val">ONGOING</div></div>
+                <div class="meta-cell"><div class="meta-lbl">MAP</div><div class="meta-val" id="meta-map">BERMUDA</div></div>
+                <div class="meta-cell"><div class="meta-lbl">MODE</div><div class="meta-val" id="meta-type">SOLO</div></div>
+                <div class="meta-cell"><div class="meta-lbl">PRIZE</div><div class="meta-val" id="meta-prize" style="color:#facc15;">₹100</div></div>
+            </div>
+
+            <!-- Video Player Theater -->
+            <div class="stream-theater" id="stream-box">
+                <div class="stream-placeholder-box">
+                    <i class="fa-brands fa-youtube"></i>
+                    <span style="font-size:13px; font-weight:700;">Live Tournament Broadcast</span>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tab-nav">
+                <button class="tab-btn active" onclick="setTab('stream')">SPECTATE</button>
+                <button class="tab-btn" onclick="setTab('rules')">RULES</button>
+                <button class="tab-btn" onclick="setTab('prize')">PRIZE MATRIX</button>
+            </div>
+
+            <!-- Tab: Stream -->
+            <div id="tab-stream" class="tab-pane active">
+                <div class="cyber-box">
+                    <h4>SPECTATE LIVE MATCH</h4>
+                    <p>Watch full match combat directly on YouTube. Spectate kills, headshots, and leaderboard scores in real time.</p>
+                </div>
+            </div>
+
+            <!-- Tab: Rules -->
+            <div id="tab-rules" class="tab-pane">
+                <div class="cyber-box">
+                    <h4>LIVE MATCH GUIDELINES</h4>
+                    <p>
+                        • Cheating, hacks, or macro tools will lead to immediate match forfeiture.<br>
+                        • Match winners and scores will be updated right after the live stream ends.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Tab: Prize -->
+            <div id="tab-prize" class="tab-pane">
+                <div class="cyber-box">
+                    <h4>PRIZE REWARDS</h4>
+                    <p id="prize-text">Loading prize details...</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Dock -->
+        <div class="bottom-dock">
+            <button class="btn-stream-action" onclick="openStreamNow()">
+                <i class="fa-brands fa-youtube" style="font-size:22px;"></i>
+                <span>WATCH LIVE STREAM</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCt3W96wZhdnbX2NiWiMFERQVXeFIdxyp0",
+            authDomain: "my-game-7da3b.firebaseapp.com",
+            databaseURL: "https://my-game-7da3b-default-rtdb.firebaseio.com",
+            projectId: "my-game-7da3b",
+            storageBucket: "my-game-7da3b.firebasestorage.app",
+            messagingSenderId: "628106631481",
+            appId: "1:628106631481:web:338fe45a9939cdcb09b0e8",
+            measurementId: "G-VJ6V9W5XX6"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const matchId = new URLSearchParams(window.location.search).get('id');
+        let streamUrl = "";
+
+        window.goBackToApp = () => { window.location.href = "index.html"; };
+
+        window.setTab = (tab) => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            if (tab === 'stream') { document.querySelectorAll('.tab-btn')[0].classList.add('active'); document.getElementById('tab-stream').classList.add('active'); }
+            if (tab === 'rules') { document.querySelectorAll('.tab-btn')[1].classList.add('active'); document.getElementById('tab-rules').classList.add('active'); }
+            if (tab === 'prize') { document.querySelectorAll('.tab-btn')[2].classList.add('active'); document.getElementById('tab-prize').classList.add('active'); }
+        };
+
+        window.openStreamNow = () => {
+            if (streamUrl) { window.open(streamUrl, '_blank'); }
+            else { alert("Live stream link is being attached by Admin. Please hold on!"); }
+        };
+
+        if (!matchId) { alert("Match ID not found!"); window.location.href = "index.html"; }
+        else {
+            const matchRef = doc(db, "tournaments", matchId);
+            onSnapshot(matchRef, (snap) => {
+                document.getElementById('full-loader').style.display = 'none';
+                if (!snap.exists()) { alert("Match not available!"); window.location.href = "index.html"; return; }
+                const m = snap.data();
+                renderLive(m);
+            });
+        }
+
+        function renderLive(m) {
+            document.getElementById('page-title').innerText = m.matchTitle || "LIVE CONTEST";
+            document.getElementById('p1-name').innerText = m.player1Name || "TEAM ALPHA";
+            document.getElementById('p2-name').innerText = m.player2Name || "TEAM OMEGA";
+            if (m.player1Logo) document.getElementById('p1-img').src = m.player1Logo;
+            if (m.player2Logo) document.getElementById('p2-img').src = m.player2Logo;
+
+            document.getElementById('meta-map').innerText = m.map || "BERMUDA";
+            document.getElementById('meta-type').innerText = m.matchType || "SOLO";
+            document.getElementById('meta-prize').innerText = `₹${m.prizePool || 0}`;
+            document.getElementById('prize-text').innerHTML = m.prizeDetails ? m.prizeDetails.replace(/\n/g, '<br>') : "Standard live match reward structure.";
+
+            streamUrl = m.streamUrl || "";
+            if (streamUrl && streamUrl.includes("watch?v=")) {
+                const vid = streamUrl.split("watch?v=")[1].split("&")[0];
+                document.getElementById('stream-box').innerHTML = `<iframe src="https://www.youtube.com/embed/${vid}?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+            } else if (streamUrl && streamUrl.includes("youtu.be/")) {
+                const vid = streamUrl.split("youtu.be/")[1].split("?")[0];
+                document.getElementById('stream-box').innerHTML = `<iframe src="https://www.youtube.com/embed/${vid}?autoplay=1" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
+            }
+        }
+    </script>
+</body>
+</html>

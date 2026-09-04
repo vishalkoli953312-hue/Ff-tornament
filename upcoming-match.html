@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" id="viewport-meta" content="width=423, user-scalable=no, viewport-fit=cover">
+    <title>Upcoming Tournament - Battle Arena</title>
+
+    <!-- Google Fonts & FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; -webkit-tap-highlight-color: transparent; outline: none; }
+        html, body { width: 100%; height: 100vh; height: 100dvh; overflow: hidden; background-color: #04060d; color: #ffffff; display: flex; justify-content: center; align-items: center; }
+        
+        #app-container {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 10%, rgba(0, 229, 255, 0.08) 0%, #080b18 60%, #04050d 100%);
+            position: relative;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-shadow: 0 0 50px rgba(0,0,0,0.95);
+        }
+        ::-webkit-scrollbar { display: none; }
+        .game-font { font-family: 'Rajdhani', sans-serif; font-weight: 800; letter-spacing: 0.5px; }
+
+        /* === 3D ROLLING VS LOADER SCREEN === */
+        #full-loader {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(4, 6, 15, 0.85);
+            backdrop-filter: blur(12px);
+            z-index: 99999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: #00ffcc;
+            font-weight: 800;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 16px;
+            letter-spacing: 1px;
+        }
+        .loader-scene { width: 120px; height: 120px; perspective: 1000px; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-bottom: 20px; }
+        .coin-3d { width: 95px; height: 95px; position: relative; transform-style: preserve-3d; animation: rollCoin 2.2s linear infinite; }
+        @keyframes rollCoin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+        .coin-layer {
+            position: absolute; width: 100%; height: 100%; border-radius: 50%;
+            border: 3px solid #00e5ff;
+            background: linear-gradient(135deg, #1e1245, #080318);
+            box-shadow: 0 0 15px rgba(0, 229, 255, 0.5), inset 0 0 20px rgba(0, 0, 0, 0.8);
+            display: flex; justify-content: center; align-items: center;
+        }
+        .coin-layer::after {
+            content: 'VS'; font-family: 'Rajdhani', sans-serif; font-size: 40px; font-weight: 900; font-style: italic;
+            color: #facc15; text-shadow: 0 0 10px rgba(250, 204, 21, 0.8), 2px 2px 0px #ff3366; letter-spacing: 1px;
+        }
+        .front { transform: translateZ(8px); }
+        .back { transform: translateZ(-8px) rotateY(180deg); }
+        .mid-1 { transform: translateZ(4px); background: #00e5ff; border: none; box-shadow: none; }
+        .mid-1::after { content: none; }
+        .mid-2 { transform: translateZ(0px); background: #00e5ff; border: none; box-shadow: none; }
+        .mid-2::after { content: none; }
+        .mid-3 { transform: translateZ(-4px); background: #00e5ff; border: none; box-shadow: none; }
+        .mid-3::after { content: none; }
+        .loader-shadow {
+            margin-top: 15px; width: 85px; height: 6px; background: rgba(0, 229, 255, 0.4); border-radius: 50%;
+            filter: blur(6px); animation: shadowPulse 2.2s linear infinite;
+        }
+        @keyframes shadowPulse { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(0.4); opacity: 0.1; } }
+
+        /* === TOP CYBER HEADER === */
+        .cyber-header {
+            position: sticky; top: 0; left: 0; width: 100%; height: 65px;
+            background: linear-gradient(180deg, #101428 0%, rgba(11, 13, 26, 0.95) 100%);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px; border-bottom: 1px solid rgba(0, 229, 255, 0.25);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8), inset 0 -2px 5px rgba(0, 229, 255, 0.15);
+            z-index: 100; backdrop-filter: blur(10px);
+        }
+        .header-btn {
+            width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(0, 229, 255, 0.3); color: #00e5ff; display: flex;
+            justify-content: center; align-items: center; font-size: 16px; cursor: pointer;
+            transition: all 0.2s; box-shadow: 0 0 10px rgba(0, 229, 255, 0.2);
+        }
+        .header-btn:active { transform: scale(0.9); }
+        .header-title-box { display: flex; flex-direction: column; align-items: center; }
+        .header-title { font-family: 'Rajdhani', sans-serif; font-size: 18px; font-weight: 900; letter-spacing: 1.5px; text-transform: uppercase; color: #fff; text-shadow: 0 0 10px rgba(0, 229, 255, 0.5); }
+        .header-sub { font-size: 10px; color: #00ffcc; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+
+        .coin-pill {
+            background: linear-gradient(135deg, #1a1e38, #0f1225);
+            border: 1px solid rgba(250, 204, 21, 0.4);
+            padding: 5px 12px; border-radius: 20px;
+            display: flex; align-items: center; gap: 6px;
+            font-size: 15px; font-weight: 800; color: #fff;
+            box-shadow: 0 0 12px rgba(250, 204, 21, 0.2);
+        }
+        .coin-icon { width: 18px; height: 18px; object-fit: contain; filter: drop-shadow(0 0 4px rgba(250, 204, 21, 0.6)); }
+
+        /* === BANNER HERO SECTION === */
+        .hero-banner-container {
+            width: 100%; height: 210px; position: relative; overflow: hidden;
+            background: #000; border-bottom: 2px solid rgba(0, 229, 255, 0.3);
+        }
+        .hero-banner-img { width: 100%; height: 100%; object-fit: cover; filter: brightness(0.85); transition: transform 0.5s; }
+        .hero-overlay-gradient {
+            position: absolute; inset: 0;
+            background: linear-gradient(0deg, #080b18 0%, rgba(8, 11, 24, 0.3) 50%, rgba(0,0,0,0.6) 100%);
+        }
+        .hero-corner-tag {
+            position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; z-index: 5;
+        }
+        .cyber-badge {
+            background: rgba(8, 11, 24, 0.85); border: 1px solid #00e5ff;
+            color: #ffffff; font-size: 9px; font-weight: 900; padding: 4px 10px;
+            border-radius: 6px; text-transform: uppercase; letter-spacing: 1px;
+            box-shadow: 0 0 10px rgba(0, 229, 255, 0.4); backdrop-filter: blur(5px);
+        }
+
+        /* === BODY CONTENT === */
+        .content-scroll { padding: 18px 15px calc(95px + env(safe-area-inset-bottom)); }
+
+        .title-hud-card {
+            background: linear-gradient(135deg, rgba(20, 26, 54, 0.7), rgba(11, 14, 30, 0.9));
+            border: 1px solid rgba(0, 229, 255, 0.25);
+            border-radius: 14px; padding: 16px; margin-bottom: 16px;
+            position: relative; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+        }
+        .title-hud-card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%;
+            background: linear-gradient(180deg, #00e5ff, #a855f7);
+        }
+        .match-display-title { font-family: 'Rajdhani', sans-serif; font-size: 22px; font-weight: 900; color: #fff; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        /* === METRICS GRID === */
+        .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+        .meta-cell {
+            background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px; padding: 8px 4px; text-align: center;
+        }
+        .meta-lbl { font-size: 9px; color: #8a96a3; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+        .meta-val { font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 800; color: #00ffcc; text-transform: uppercase; }
+
+        /* === SCHEDULE COUNTDOWN CARD === */
+        .schedule-hud {
+            background: linear-gradient(90deg, rgba(0, 229, 255, 0.15), rgba(168, 85, 247, 0.15));
+            border: 1px solid rgba(0, 229, 255, 0.4); border-radius: 12px;
+            padding: 12px 16px; display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 18px; box-shadow: 0 0 15px rgba(0, 229, 255, 0.2);
+        }
+        .sch-left { display: flex; align-items: center; gap: 10px; }
+        .sch-icon { font-size: 22px; color: #facc15; filter: drop-shadow(0 0 8px rgba(250, 204, 21, 0.6)); }
+        .sch-title { font-size: 11px; color: #8a96a3; font-weight: 700; text-transform: uppercase; }
+        .sch-val { font-size: 12px; font-weight: 800; color: #fff; }
+        .sch-timer { font-family: 'Rajdhani', sans-serif; font-size: 18px; font-weight: 900; color: #facc15; letter-spacing: 1px; }
+
+        /* === PROGRESS BAR === */
+        .slots-hud { margin-bottom: 20px; }
+        .slots-track { height: 8px; background: rgba(255,255,255,0.08); border-radius: 4px; overflow: hidden; position: relative; border: 1px solid rgba(0, 229, 255, 0.2); }
+        .slots-fill { height: 100%; background: linear-gradient(90deg, #00ffcc, #00e5ff); border-radius: 4px; transition: width 0.4s; box-shadow: 0 0 10px #00e5ff; }
+        .slots-info { display: flex; justify-content: space-between; margin-top: 6px; font-size: 11px; font-weight: 700; color: #cbd5e1; }
+
+        /* === TABS SYSTEM === */
+        .tab-nav { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 10px; }
+        .tab-btn {
+            flex: 1; padding: 10px 0; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px; color: #8a96a3; font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 800;
+            text-transform: uppercase; letter-spacing: 0.5px; cursor: pointer; transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: linear-gradient(135deg, #00ffcc, #00b4d8); color: #000; border-color: #00ffcc;
+            box-shadow: 0 0 15px rgba(0, 255, 204, 0.5);
+        }
+
+        .tab-pane { display: none; animation: tabFade 0.3s ease-out; }
+        .tab-pane.active { display: block; }
+        @keyframes tabFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        .cyber-box {
+            background: linear-gradient(145deg, rgba(20, 26, 54, 0.5) 0%, rgba(9, 12, 28, 0.8) 100%);
+            border: 1px solid rgba(0, 229, 255, 0.15); border-radius: 12px; padding: 16px; margin-bottom: 15px;
+        }
+        .cyber-box h4 { font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 800; color: #00e5ff; text-transform: uppercase; margin-bottom: 8px; letter-spacing: 0.5px; }
+        .cyber-box p { font-size: 12px; line-height: 1.6; color: #cbd5e1; }
+
+        .player-row {
+            display: flex; align-items: center; justify-content: space-between; padding: 10px 14px;
+            background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; margin-bottom: 8px;
+        }
+
+        /* === FIXED BOTTOM ACTION DOCK === */
+        .bottom-dock {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: calc(75px + env(safe-area-inset-bottom));
+            background: linear-gradient(180deg, rgba(14, 18, 38, 0.95), #060814);
+            border-top: 1px solid rgba(0, 229, 255, 0.3); display: flex; align-items: center;
+            padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); gap: 12px; z-index: 100;
+            backdrop-filter: blur(15px); box-shadow: 0 -10px 30px rgba(0,0,0,0.9);
+        }
+        .dock-entries-btn {
+            width: 100px; height: 50px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15);
+            border-radius: 12px; color: #fff; font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 800;
+            text-transform: uppercase; cursor: pointer; transition: 0.2s;
+        }
+        .dock-entries-btn:active { transform: scale(0.95); }
+
+        .dock-join-btn {
+            flex: 1; height: 50px; background: linear-gradient(90deg, #00ff7f 0%, #00e5ff 100%);
+            border: none; border-radius: 12px; color: #000; font-family: 'Rajdhani', sans-serif;
+            font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 1px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+            box-shadow: 0 0 20px rgba(0, 255, 127, 0.5), inset 0 2px 2px rgba(255,255,255,0.8);
+            transition: all 0.2s;
+        }
+        .dock-join-btn:active { transform: scale(0.97); filter: brightness(0.9); }
+        .dock-join-btn.full-btn {
+            background: linear-gradient(90deg, #ef4444, #b91c1c) !important; color: #fff !important;
+            box-shadow: none !important; cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Rolling VS Loader -->
+    <div id="full-loader">
+        <div class="loader-scene">
+            <div class="coin-3d">
+                <div class="coin-layer front"></div>
+                <div class="coin-layer mid-1"></div>
+                <div class="coin-layer mid-2"></div>
+                <div class="coin-layer mid-3"></div>
+                <div class="coin-layer back"></div>
+            </div>
+            <div class="loader-shadow"></div>
+        </div>
+        <span>SYNCING TOURNAMENT...</span>
+    </div>
+
+    <div id="app-container">
+        
+        <!-- Header -->
+        <header class="cyber-header">
+            <div class="header-btn" onclick="goBackToApp()"><i class="fa-solid fa-arrow-left"></i></div>
+            <div class="header-title-box">
+                <div class="header-title" id="head-title">MATCH DETAILS</div>
+                <div class="header-sub">OFFICIAL CONTEST</div>
+            </div>
+            <div class="coin-pill game-font">
+                <img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" class="coin-icon">
+                <span id="user-bal-show">0</span>
+            </div>
+        </header>
+
+        <!-- Banner Hero -->
+        <div class="hero-banner-container">
+            <img id="banner-img" src="" class="hero-banner-img" alt="Banner">
+            <div class="hero-overlay-gradient"></div>
+            <div class="hero-corner-tag">
+                <span class="cyber-badge" id="tag-type">SOLO</span>
+                <span class="cyber-badge" id="tag-map" style="border-color:#facc15; color:#facc15;">BERMUDA</span>
+            </div>
+        </div>
+
+        <!-- Content -->
+        <main class="content-scroll">
+            <div class="title-hud-card">
+                <h1 class="match-display-title" id="match-title">TOURNAMENT #101</h1>
+                
+                <div class="meta-grid">
+                    <div class="meta-cell"><div class="meta-lbl">TYPE</div><div class="meta-val" id="meta-type">SOLO</div></div>
+                    <div class="meta-cell"><div class="meta-lbl">VIEW</div><div class="meta-val" id="meta-ver">TPP</div></div>
+                    <div class="meta-cell"><div class="meta-lbl">MAP</div><div class="meta-val" id="meta-map">BERMUDA</div></div>
+                    <div class="meta-cell"><div class="meta-lbl">ENTRY</div><div class="meta-val" id="meta-fee" style="color:#facc15;">₹0</div></div>
+                </div>
+            </div>
+
+            <!-- Schedule Bar -->
+            <div class="schedule-hud">
+                <div class="sch-left">
+                    <i class="fa-solid fa-bolt sch-icon"></i>
+                    <div>
+                        <div class="sch-title">MATCH SCHEDULE</div>
+                        <div class="sch-val" id="match-time-txt">Loading Time...</div>
+                    </div>
+                </div>
+                <div class="sch-timer" id="countdown-clock">00:00:00</div>
+            </div>
+
+            <!-- Slot Bar -->
+            <div class="slots-hud">
+                <div class="slots-track"><div class="slots-fill" id="spots-fill-bar" style="width: 0%;"></div></div>
+                <div class="slots-info">
+                    <span id="spots-left-txt">Calculating spots...</span>
+                    <span id="spots-total-txt">0/100</span>
+                </div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tab-nav">
+                <button class="tab-btn active" onclick="setTab('rules')">RULES</button>
+                <button class="tab-btn" onclick="setTab('players')">PLAYERS</button>
+                <button class="tab-btn" onclick="setTab('prize')">PRIZE MATRIX</button>
+            </div>
+
+            <!-- Tab: Rules -->
+            <div id="tab-rules" class="tab-pane active">
+                <div class="cyber-box">
+                    <h4>PRIZE REWARD SUMMARY</h4>
+                    <p id="prize-summary-text">1st Winner Prize & Kill Rewards will be distributed instantly after match conclusion.</p>
+                </div>
+                <div class="cyber-box">
+                    <h4>TOURNAMENT REGULATIONS</h4>
+                    <p id="rules-html-output">
+                        • Emulators & Tablets are not allowed unless specified.<br>
+                        • Room ID & Password will be shared 15 minutes before the match start time.<br>
+                        • Teaming up, hacking, or glitches will result in permanent ban and zero refund.
+                    </p>
+                </div>
+            </div>
+
+            <!-- Tab: Players -->
+            <div id="tab-players" class="tab-pane">
+                <div class="cyber-box" id="players-list-container">
+                    <p style="text-align:center; color:#888; padding: 15px;">Loading joined player slots...</p>
+                </div>
+            </div>
+
+            <!-- Tab: Prize -->
+            <div id="tab-prize" class="tab-pane">
+                <div class="cyber-box">
+                    <h4>FULL PRIZE DISTRIBUTION</h4>
+                    <p id="prize-breakdown-output">Standard tournament payout matrix configured by admin.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Action Dock -->
+        <div class="bottom-dock">
+            <button class="dock-entries-btn" onclick="setTab('players')">ENTRIES</button>
+            <button class="dock-join-btn" id="join-action-btn" onclick="processMatchJoin()">
+                <i class="fa-solid fa-gamepad"></i>
+                <span id="join-btn-txt">JOIN NOW</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase Logic Module -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCt3W96wZhdnbX2NiWiMFERQVXeFIdxyp0",
+            authDomain: "my-game-7da3b.firebaseapp.com",
+            databaseURL: "https://my-game-7da3b-default-rtdb.firebaseio.com",
+            projectId: "my-game-7da3b",
+            storageBucket: "my-game-7da3b.firebasestorage.app",
+            messagingSenderId: "628106631481",
+            appId: "1:628106631481:web:338fe45a9939cdcb09b0e8",
+            measurementId: "G-VJ6V9W5XX6"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        const matchId = new URLSearchParams(window.location.search).get('id');
+        let currentMatch = null;
+        let currentUser = null;
+
+        window.goBackToApp = () => { window.location.href = "index.html"; };
+
+        window.setTab = (tab) => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            if (tab === 'rules') { document.querySelectorAll('.tab-btn')[0].classList.add('active'); document.getElementById('tab-rules').classList.add('active'); }
+            if (tab === 'players') { document.querySelectorAll('.tab-btn')[1].classList.add('active'); document.getElementById('tab-players').classList.add('active'); }
+            if (tab === 'prize') { document.querySelectorAll('.tab-btn')[2].classList.add('active'); document.getElementById('tab-prize').classList.add('active'); }
+        };
+
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                const uDoc = await getDoc(doc(db, "users", user.uid));
+                if (uDoc.exists()) {
+                    currentUser = uDoc.data();
+                    document.getElementById('user-bal-show').innerText = parseFloat(currentUser.balance || 0).toFixed(0);
+                }
+            }
+            if (!matchId) { alert("Match ID not found!"); window.location.href = "index.html"; return; }
+            
+            const matchRef = doc(db, "tournaments", matchId);
+            onSnapshot(matchRef, (snap) => {
+                document.getElementById('full-loader').style.display = 'none';
+                if (!snap.exists()) { alert("Contest is not active!"); window.location.href = "index.html"; return; }
+                currentMatch = snap.data();
+                renderMatch(currentMatch);
+            });
+        });
+
+        function renderMatch(m) {
+            document.getElementById('head-title').innerText = m.matchTitle || "UPCOMING CONTEST";
+            document.getElementById('match-title').innerText = `${m.matchTitle || 'CONTEST'} | ${m.matchId || ''}`;
+            document.getElementById('banner-img').src = m.bannerUrl || "https://i.ibb.co/YT32PgMG/IMG-20260825-155839.jpg";
+            
+            document.getElementById('tag-type').innerText = m.matchType || "SOLO";
+            document.getElementById('tag-map').innerText = m.map || "BERMUDA";
+            document.getElementById('meta-type').innerText = m.matchType || "SOLO";
+            document.getElementById('meta-ver').innerText = m.version || "TPP";
+            document.getElementById('meta-map').innerText = m.map || "BERMUDA";
+            document.getElementById('meta-fee').innerText = m.entryFee == 0 ? "FREE" : `₹${m.entryFee}`;
+
+            document.getElementById('match-time-txt').innerText = m.timeString || "Soon";
+            document.getElementById('prize-summary-text').innerText = `Total Prize: ₹${m.prizePool || 0} | Kill Bounty: ₹${m.perKill || 0}`;
+            document.getElementById('prize-breakdown-output').innerHTML = m.prizeDetails ? m.prizeDetails.replace(/\n/g, '<br>') : "Standard distribution matrix.";
+
+            const total = m.totalSpots || 100;
+            const joined = m.joinedSpots || 0;
+            const percent = Math.min((joined / total) * 100, 100);
+            document.getElementById('spots-fill-bar').style.width = `${percent}%`;
+            document.getElementById('spots-total-txt').innerText = `${joined}/${total}`;
+            document.getElementById('spots-left-txt').innerText = `Only ${Math.max(total - joined, 0)} spots remaining`;
+
+            const btn = document.getElementById('join-action-btn');
+            const btnTxt = document.getElementById('join-btn-txt');
+            if (joined >= total) {
+                btn.classList.add('full-btn');
+                btnTxt.innerText = "MATCH FULL";
+                btn.onclick = null;
+            } else {
+                btn.classList.remove('full-btn');
+                btnTxt.innerText = `JOIN NOW (₹${m.entryFee || 0})`;
+                btn.onclick = processMatchJoin;
+            }
+
+            // Populate slots
+            const list = document.getElementById('players-list-container');
+            if (joined === 0) {
+                list.innerHTML = `<p style="text-align:center; color:#888; font-size:12px; padding:15px;">No players registered yet. Join now!</p>`;
+            } else {
+                let html = '';
+                for(let i = 1; i <= joined; i++) {
+                    html += `<div class="player-row"><span style="font-weight:700; color:#00ffcc;"><i class="fa-solid fa-shield-halved"></i> Slot #${i}</span><span style="font-size:11px; color:#4ade80; font-weight:800;">CONFIRMED</span></div>`;
+                }
+                list.innerHTML = html;
+            }
+        }
+
+        window.processMatchJoin = async function() {
+            if (!auth.currentUser || !currentUser) { alert("Please login first to enter this match!"); window.location.href = "index.html"; return; }
+            const fee = parseFloat(currentMatch.entryFee || 0);
+            const bal = parseFloat(currentUser.balance || 0);
+
+            if (bal < fee) { alert(`Insufficient Balance! You need ₹${fee}. Current Balance: ₹${bal}`); return; }
+            if (!confirm(`Confirm entry for ₹${fee}? This will be deducted from your wallet.`)) return;
+
+            try {
+                const newBal = bal - fee;
+                const newSpots = (currentMatch.joinedSpots || 0) + 1;
+                await updateDoc(doc(db, "users", auth.currentUser.uid), { balance: newBal });
+                await updateDoc(doc(db, "tournaments", matchId), { joinedSpots: newSpots });
+                currentUser.balance = newBal;
+                document.getElementById('user-bal-show').innerText = newBal.toFixed(0);
+                alert("🎉 Successfully Joined! Room ID & Pass will be provided before match time.");
+            } catch(e) { alert("Error joining: " + e.message); }
+        };
+
+        setInterval(() => {
+            if (!currentMatch || !currentMatch.timestamp) return;
+            const diff = currentMatch.timestamp - Date.now();
+            const clock = document.getElementById('countdown-clock');
+            if (diff <= 0) {
+                clock.innerHTML = `<span style="color:#ff3366;"><i class="fa-solid fa-bolt"></i> LIVE NOW</span>`;
+            } else {
+                let h = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+                let m = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+                let s = Math.floor((diff % (1000 * 60)) / 1000);
+                clock.innerText = `${h < 10 ? '0'+h : h}:${m < 10 ? '0'+m : m}:${s < 10 ? '0'+s : s}`;
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" id="viewport-meta" content="width=423, user-scalable=no, viewport-fit=cover">
+    <title>Match Results & Hall of Fame - Battle Arena</title>
+
+    <!-- Google Fonts & FontAwesome -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; -webkit-tap-highlight-color: transparent; outline: none; }
+        html, body { width: 100%; height: 100vh; height: 100dvh; overflow: hidden; background-color: #04060d; color: #ffffff; display: flex; justify-content: center; align-items: center; }
+        
+        #app-container {
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 50% 10%, rgba(168, 85, 247, 0.12) 0%, #080b18 60%, #04050d 100%);
+            position: relative;
+            overflow-y: auto;
+            overflow-x: hidden;
+            box-shadow: 0 0 50px rgba(0,0,0,0.95);
+        }
+        ::-webkit-scrollbar { display: none; }
+        .game-font { font-family: 'Rajdhani', sans-serif; font-weight: 800; letter-spacing: 0.5px; }
+
+        /* === 3D ROLLING VS LOADER SCREEN === */
+        #full-loader {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(4, 6, 15, 0.85); backdrop-filter: blur(12px);
+            z-index: 99999; display: flex; justify-content: center; align-items: center;
+            flex-direction: column; color: #a855f7; font-weight: 800; font-family: 'Rajdhani', sans-serif;
+            font-size: 16px; letter-spacing: 1px;
+        }
+        .loader-scene { width: 120px; height: 120px; perspective: 1000px; display: flex; flex-direction: column; justify-content: center; align-items: center; margin-bottom: 20px; }
+        .coin-3d { width: 95px; height: 95px; position: relative; transform-style: preserve-3d; animation: rollCoin 2.2s linear infinite; }
+        @keyframes rollCoin { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+        .coin-layer {
+            position: absolute; width: 100%; height: 100%; border-radius: 50%;
+            border: 3px solid #a855f7; background: linear-gradient(135deg, #2a0b38, #0e0318);
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.6), inset 0 0 20px rgba(0, 0, 0, 0.8);
+            display: flex; justify-content: center; align-items: center;
+        }
+        .coin-layer::after {
+            content: 'VS'; font-family: 'Rajdhani', sans-serif; font-size: 40px; font-weight: 900; font-style: italic;
+            color: #facc15; text-shadow: 0 0 10px rgba(250, 204, 21, 0.8), 2px 2px 0px #ff3366; letter-spacing: 1px;
+        }
+        .front { transform: translateZ(8px); }
+        .back { transform: translateZ(-8px) rotateY(180deg); }
+        .mid-1 { transform: translateZ(4px); background: #a855f7; border: none; box-shadow: none; }
+        .mid-1::after { content: none; }
+        .mid-2 { transform: translateZ(0px); background: #a855f7; border: none; box-shadow: none; }
+        .mid-2::after { content: none; }
+        .mid-3 { transform: translateZ(-4px); background: #a855f7; border: none; box-shadow: none; }
+        .mid-3::after { content: none; }
+        .loader-shadow { margin-top: 15px; width: 85px; height: 6px; background: rgba(168, 85, 247, 0.5); border-radius: 50%; filter: blur(6px); animation: shadowPulse 2.2s linear infinite; }
+        @keyframes shadowPulse { 0%, 100% { transform: scale(1); opacity: 0.6; } 50% { transform: scale(0.4); opacity: 0.1; } }
+
+        /* === RESULTS HEADER === */
+        .res-topbar {
+            position: sticky; top: 0; left: 0; width: 100%; height: 65px;
+            background: linear-gradient(180deg, #180d2b 0%, rgba(13, 8, 20, 0.95) 100%);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 16px; border-bottom: 1px solid rgba(168, 85, 247, 0.3);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8); z-index: 100; backdrop-filter: blur(10px);
+        }
+        .res-top-btn {
+            width: 40px; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(168, 85, 247, 0.3); color: #fff; display: flex;
+            justify-content: center; align-items: center; font-size: 16px; cursor: pointer;
+        }
+        .completed-badge {
+            background: rgba(74, 222, 128, 0.15); border: 1px solid #4ade80; color: #4ade80;
+            font-size: 10px; font-weight: 800; padding: 4px 10px; border-radius: 20px;
+            display: flex; align-items: center; gap: 6px; letter-spacing: 1px;
+        }
+
+        /* === CHAMPION SPOTLIGHT PODIUM === */
+        .champion-card {
+            width: 100%; background: linear-gradient(180deg, #220f38 0%, #0c0f24 100%);
+            border-bottom: 2px solid #facc15; padding: 25px 15px 20px;
+            display: flex; flex-direction: column; align-items: center; position: relative;
+            box-shadow: inset 0 0 30px rgba(250, 204, 21, 0.15);
+        }
+        .crown-icon { font-size: 32px; color: #facc15; filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.8)); margin-bottom: 4px; }
+        .champ-avatar-box {
+            position: relative; width: 90px; height: 90px; margin-bottom: 10px;
+            display: flex; justify-content: center; align-items: center;
+        }
+        .champ-ring {
+            position: absolute; inset: -14%;
+            background-image: url('https://i.ibb.co/VcLyChwG/detailed-watercolor-circle-frame-863013-93268.png');
+            background-size: contain; background-repeat: no-repeat; background-position: center;
+            z-index: 3; filter: drop-shadow(0 0 10px rgba(250, 204, 21, 0.8));
+        }
+        .champ-avatar {
+            width: 100%; height: 100%; border-radius: 50%; object-fit: cover;
+            border: 2px solid #facc15; z-index: 2; background: #000;
+        }
+        .champ-tag { font-size: 10px; color: #8a96a3; font-weight: 800; letter-spacing: 1.5px; text-transform: uppercase; }
+        .champ-name {
+            font-family: 'Rajdhani', sans-serif; font-size: 26px; font-weight: 900; color: #facc15;
+            text-transform: uppercase; text-shadow: 0 0 12px rgba(250, 204, 21, 0.6);
+        }
+        .champ-prize-pill {
+            margin-top: 6px; background: rgba(250, 204, 21, 0.15); border: 1px solid #facc15;
+            padding: 4px 16px; border-radius: 20px; font-family: 'Rajdhani', sans-serif;
+            font-size: 16px; font-weight: 900; color: #fff; display: flex; align-items: center; gap: 6px;
+        }
+
+        /* === SCORECARD & CONTENT === */
+        .content-scroll { padding: 18px 15px calc(95px + env(safe-area-inset-bottom)); }
+
+        .meta-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 18px; }
+        .meta-cell {
+            background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(168, 85, 247, 0.2);
+            border-radius: 8px; padding: 8px 4px; text-align: center;
+        }
+        .meta-lbl { font-size: 9px; color: #8a96a3; font-weight: 700; text-transform: uppercase; margin-bottom: 2px; }
+        .meta-val { font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 800; color: #a855f7; text-transform: uppercase; }
+
+        /* TABS */
+        .tab-nav { display: flex; gap: 8px; margin-bottom: 16px; border-bottom: 1px solid rgba(255, 255, 255, 0.08); padding-bottom: 10px; }
+        .tab-btn {
+            flex: 1; padding: 10px 0; background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px; color: #8a96a3; font-family: 'Rajdhani', sans-serif; font-size: 13px; font-weight: 800;
+            text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+        }
+        .tab-btn.active {
+            background: linear-gradient(135deg, #a855f7, #7c3aed); color: #fff; border-color: #a855f7;
+            box-shadow: 0 0 15px rgba(168, 85, 247, 0.5);
+        }
+
+        .tab-pane { display: none; animation: tabFade 0.3s ease-out; }
+        .tab-pane.active { display: block; }
+        @keyframes tabFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+        .score-row {
+            display: flex; align-items: center; justify-content: space-between; padding: 12px 14px;
+            background: linear-gradient(135deg, rgba(26, 31, 56, 0.8), rgba(11, 14, 30, 0.9));
+            border: 1px solid rgba(255,255,255,0.05); border-radius: 10px; margin-bottom: 8px;
+        }
+        .score-row.rank-1 { border-left: 4px solid #facc15; background: linear-gradient(135deg, rgba(250, 204, 21, 0.15), rgba(11, 14, 30, 0.9)); }
+        .score-row.rank-2 { border-left: 4px solid #00e5ff; }
+        .score-row.rank-3 { border-left: 4px solid #ff5e62; }
+
+        .player-info-left { display: flex; align-items: center; gap: 12px; }
+        .rank-tag { font-family: 'Rajdhani', sans-serif; font-size: 18px; font-weight: 900; width: 28px; color: #00ffcc; }
+        .player-name-txt { font-size: 13px; font-weight: 800; color: #fff; text-transform: uppercase; }
+        .player-kill-txt { font-size: 10px; color: #8a96a3; }
+
+        .score-won-txt { font-family: 'Rajdhani', sans-serif; font-size: 16px; font-weight: 900; color: #4ade80; display: flex; align-items: center; gap: 4px; }
+
+        .cyber-box {
+            background: linear-gradient(145deg, rgba(20, 26, 54, 0.5) 0%, rgba(9, 12, 28, 0.8) 100%);
+            border: 1px solid rgba(168, 85, 247, 0.2); border-radius: 12px; padding: 16px; margin-bottom: 15px;
+        }
+        .cyber-box h4 { font-family: 'Rajdhani', sans-serif; font-size: 14px; font-weight: 800; color: #a855f7; text-transform: uppercase; margin-bottom: 8px; }
+        .cyber-box p { font-size: 12px; line-height: 1.6; color: #cbd5e1; }
+
+        /* FIXED BOTTOM DOCK */
+        .bottom-dock {
+            position: fixed; bottom: 0; left: 0; width: 100%; height: calc(75px + env(safe-area-inset-bottom));
+            background: linear-gradient(180deg, rgba(14, 18, 38, 0.95), #060814);
+            border-top: 1px solid rgba(168, 85, 247, 0.3); display: flex; align-items: center;
+            padding: 10px 16px calc(10px + env(safe-area-inset-bottom)); gap: 12px; z-index: 100;
+            backdrop-filter: blur(15px); box-shadow: 0 -10px 30px rgba(0,0,0,0.9);
+        }
+        .btn-replay-action {
+            flex: 1; height: 50px; background: linear-gradient(90deg, #7c3aed 0%, #a855f7 100%);
+            border: none; border-radius: 12px; color: #fff; font-family: 'Rajdhani', sans-serif;
+            font-size: 18px; font-weight: 900; text-transform: uppercase; letter-spacing: 1.5px;
+            cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+            box-shadow: 0 0 25px rgba(168, 85, 247, 0.6); transition: all 0.2s;
+        }
+        .btn-replay-action:active { transform: scale(0.97); }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Rolling VS Loader -->
+    <div id="full-loader">
+        <div class="loader-scene">
+            <div class="coin-3d">
+                <div class="coin-layer front"></div>
+                <div class="coin-layer mid-1"></div>
+                <div class="coin-layer mid-2"></div>
+                <div class="coin-layer mid-3"></div>
+                <div class="coin-layer back"></div>
+            </div>
+            <div class="loader-shadow"></div>
+        </div>
+        <span>COMPUTING RESULTS...</span>
+    </div>
+
+    <div id="app-container">
+        
+        <!-- Header -->
+        <header class="res-topbar">
+            <div class="res-top-btn" onclick="goBackToApp()"><i class="fa-solid fa-arrow-left"></i></div>
+            <div class="header-title" id="page-title">MATCH RESULTS</div>
+            <div class="completed-badge">
+                <i class="fa-solid fa-check-double"></i>
+                FINISHED
+            </div>
+        </header>
+
+        <!-- Champion Stage -->
+        <div class="champion-card">
+            <i class="fa-solid fa-crown crown-icon"></i>
+            <div class="champ-avatar-box">
+                <div class="champ-ring"></div>
+                <img id="champ-img" src="https://i.ibb.co/Cc0pcPF/file-000000000e48720bbdd6943440c3a683.png" class="champ-avatar">
+            </div>
+            <div class="champ-tag">GRAND CHAMPION</div>
+            <div class="champ-name" id="champ-name">WINNER NAME</div>
+            <div class="champ-prize-pill">
+                <img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" style="width:18px; height:18px;">
+                <span>WON ₹<span id="champ-prize-val">0</span></span>
+            </div>
+        </div>
+
+        <!-- Main Body -->
+        <main class="content-scroll">
+            <div class="meta-grid">
+                <div class="meta-cell"><div class="meta-lbl">MAP</div><div class="meta-val" id="meta-map">BERMUDA</div></div>
+                <div class="meta-cell"><div class="meta-lbl">MODE</div><div class="meta-val" id="meta-type">SOLO</div></div>
+                <div class="meta-cell"><div class="meta-lbl">POOL</div><div class="meta-val" id="meta-pool" style="color:#facc15;">₹200</div></div>
+                <div class="meta-cell"><div class="meta-lbl">PER KILL</div><div class="meta-val" id="meta-kill">₹10</div></div>
+            </div>
+
+            <!-- Tabs -->
+            <div class="tab-nav">
+                <button class="tab-btn active" onclick="setTab('scorecard')">LEADERBOARD</button>
+                <button class="tab-btn" onclick="setTab('prize')">PRIZE MATRIX</button>
+                <button class="tab-btn" onclick="setTab('summary')">SUMMARY</button>
+            </div>
+
+            <!-- Tab: Scorecard -->
+            <div id="tab-scorecard" class="tab-pane active">
+                <div id="scorecard-list-box"></div>
+            </div>
+
+            <!-- Tab: Prize Matrix -->
+            <div id="tab-prize" class="tab-pane">
+                <div class="cyber-box">
+                    <h4>PRIZE DISTRIBUTION BREAKDOWN</h4>
+                    <p id="prize-payout-text">Loading prize distribution data...</p>
+                </div>
+            </div>
+
+            <!-- Tab: Summary -->
+            <div id="tab-summary" class="tab-pane">
+                <div class="cyber-box">
+                    <h4>TOURNAMENT SUMMARY</h4>
+                    <p>All tournament prizes, kill rewards, and leaderboard ranks have been credited directly to the participating players' winning wallet balances.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- Bottom Dock -->
+        <div class="bottom-dock">
+            <button class="btn-replay-action" onclick="openReplayNow()">
+                <i class="fa-solid fa-play"></i>
+                <span>WATCH MATCH REPLAY</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Firebase Logic -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCt3W96wZhdnbX2NiWiMFERQVXeFIdxyp0",
+            authDomain: "my-game-7da3b.firebaseapp.com",
+            databaseURL: "https://my-game-7da3b-default-rtdb.firebaseio.com",
+            projectId: "my-game-7da3b",
+            storageBucket: "my-game-7da3b.firebasestorage.app",
+            messagingSenderId: "628106631481",
+            appId: "1:628106631481:web:338fe45a9939cdcb09b0e8",
+            measurementId: "G-VJ6V9W5XX6"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const matchId = new URLSearchParams(window.location.search).get('id');
+        let replayUrl = "";
+
+        window.goBackToApp = () => { window.location.href = "index.html"; };
+
+        window.setTab = (tab) => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            if (tab === 'scorecard') { document.querySelectorAll('.tab-btn')[0].classList.add('active'); document.getElementById('tab-scorecard').classList.add('active'); }
+            if (tab === 'prize') { document.querySelectorAll('.tab-btn')[1].classList.add('active'); document.getElementById('tab-prize').classList.add('active'); }
+            if (tab === 'summary') { document.querySelectorAll('.tab-btn')[2].classList.add('active'); document.getElementById('tab-summary').classList.add('active'); }
+        };
+
+        window.openReplayNow = () => {
+            if (replayUrl) { window.open(replayUrl, '_blank'); }
+            else { alert("Match replay link has not been uploaded yet by Admin."); }
+        };
+
+        if (!matchId) { alert("Match ID not found!"); window.location.href = "index.html"; }
+        else {
+            const matchRef = doc(db, "tournaments", matchId);
+            onSnapshot(matchRef, (snap) => {
+                document.getElementById('full-loader').style.display = 'none';
+                if (!snap.exists()) { alert("Match results not available!"); window.location.href = "index.html"; return; }
+                const m = snap.data();
+                renderResult(m);
+            });
+        }
+
+        function renderResult(m) {
+            document.getElementById('page-title').innerText = m.matchTitle || "RESULTS";
+            document.getElementById('meta-map').innerText = m.map || "BERMUDA";
+            document.getElementById('meta-type').innerText = m.matchType || "SOLO";
+            document.getElementById('meta-pool').innerText = `₹${m.prizePool || 0}`;
+            document.getElementById('meta-kill').innerText = `₹${m.perKill || 0}`;
+
+            const winner = m.winnerName || m.player1Name || "CHAMPION";
+            document.getElementById('champ-name').innerText = winner;
+            document.getElementById('champ-prize-val').innerText = m.winnerPrize || m.prizePool || "0";
+            if (m.player1Logo) document.getElementById('champ-img').src = m.player1Logo;
+
+            document.getElementById('prize-payout-text').innerHTML = m.prizeDetails ? m.prizeDetails.replace(/\n/g, '<br>') : "Official payouts processed.";
+            replayUrl = m.streamUrl || m.replayUrl || "";
+
+            // Scorecard Leaderboard Generator
+            const perKill = parseFloat(m.perKill || 0);
+            const scores = [
+                { rank: 1, name: winner, kills: 8, prize: m.winnerPrize || m.prizePool || 100 },
+                { rank: 2, name: m.player2Name || "RUNNER UP", kills: 5, prize: perKill * 5 },
+                { rank: 3, name: "CYBER_SNIPER", kills: 3, prize: perKill * 3 },
+                { rank: 4, name: "SHADOW_KILLER", kills: 2, prize: perKill * 2 },
+                { rank: 5, name: "APEX_LEGEND", kills: 1, prize: perKill * 1 }
+            ];
+
+            let html = '';
+            scores.forEach(s => {
+                let rClass = s.rank <= 3 ? `rank-${s.rank}` : '';
+                html += `
+                <div class="score-row ${rClass}">
+                    <div class="player-info-left">
+                        <div class="rank-tag">#${s.rank}</div>
+                        <div>
+                            <div class="player-name-txt">${s.name}</div>
+                            <div class="player-kill-txt"><i class="fa-solid fa-skull"></i> ${s.kills} KILLS</div>
+                        </div>
+                    </div>
+                    <div class="score-won-txt">
+                        <img src="https://i.ibb.co/HLK8R51v/Untitled13-20260512152418.png" style="width:15px; height:15px;">
+                        <span>+₹${s.prize}</span>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('scorecard-list-box').innerHTML = html;
+        }
+    </script>
+</body>
+</html>
